@@ -1,0 +1,48 @@
+KEY: activities
+TYPE: <class 'set'>
+SIZE: 11
+
+KEY: object_types
+TYPE: <class 'set'>
+SIZE: 5
+
+KEY: edges
+TYPE: <class 'dict'>
+SUBKEYS: ['event_couples', 'unique_objects', 'total_objects']
+
+KEY: activities_indep
+TYPE: <class 'dict'>
+SUBKEYS: ['events', 'unique_objects', 'total_objects']
+
+KEY: activities_ot
+TYPE: <class 'dict'>
+SUBKEYS: ['events', 'unique_objects', 'total_objects']
+
+KEY: start_activities
+TYPE: <class 'dict'>
+SUBKEYS: ['events', 'unique_objects', 'total_objects']
+
+KEY: end_activities
+TYPE: <class 'dict'>
+SUBKEYS: ['events', 'unique_objects', 'total_objects']
+
+KEY: edges_performance
+TYPE: <class 'dict'>
+SUBKEYS: ['event_couples', 'total_objects']
+
+KEY: petri_nets
+TYPE: <class 'dict'>
+SUBKEYS: ['packages', 'employees', 'items', 'products', 'orders']
+
+KEY: double_arcs_on_activity
+TYPE: <class 'dict'>
+SUBKEYS: ['packages', 'employees', 'items', 'products', 'orders']
+
+KEY: object_ids
+TYPE: <class 'dict'>
+SUBKEYS: ['employees', 'items', 'orders', 'packages', 'products']
+
+KEY: tbr_results
+TYPE: <class 'dict'>
+SUBKEYS: []
+

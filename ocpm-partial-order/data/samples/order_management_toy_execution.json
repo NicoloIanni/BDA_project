@@ -1,0 +1,114 @@
+{
+  "execution_id": "order-management-toy-001",
+  "events": [
+    {
+      "event_id": "e1",
+      "activity": "place order",
+      "timestamp": "2026-01-01T09:00:00",
+      "objects": [
+        {
+          "object_id": "C1",
+          "object_type": "customers"
+        },
+        {
+          "object_id": "O1",
+          "object_type": "orders"
+        },
+        {
+          "object_id": "I1",
+          "object_type": "items"
+        }
+      ]
+    },
+    {
+      "event_id": "e2",
+      "activity": "confirm order",
+      "timestamp": "2026-01-01T09:15:00",
+      "objects": [
+        {
+          "object_id": "O1",
+          "object_type": "orders"
+        },
+        {
+          "object_id": "ES1",
+          "object_type": "employees"
+        }
+      ]
+    },
+    {
+      "event_id": "e3",
+      "activity": "pay order",
+      "timestamp": "2026-01-01T10:30:00",
+      "objects": [
+        {
+          "object_id": "O1",
+          "object_type": "orders"
+        },
+        {
+          "object_id": "ES1",
+          "object_type": "employees"
+        }
+      ]
+    },
+    {
+      "event_id": "e4",
+      "activity": "pick item",
+      "timestamp": "2026-01-01T09:20:00",
+      "objects": [
+        {
+          "object_id": "I1",
+          "object_type": "items"
+        },
+        {
+          "object_id": "EW1",
+          "object_type": "employees"
+        }
+      ]
+    },
+    {
+      "event_id": "e5",
+      "activity": "create package",
+      "timestamp": "2026-01-01T10:00:00",
+      "objects": [
+        {
+          "object_id": "I1",
+          "object_type": "items"
+        },
+        {
+          "object_id": "P1",
+          "object_type": "packages"
+        },
+        {
+          "object_id": "EW1",
+          "object_type": "employees"
+        }
+      ]
+    },
+    {
+      "event_id": "e6",
+      "activity": "send package",
+      "timestamp": "2026-01-01T11:00:00",
+      "objects": [
+        {
+          "object_id": "P1",
+          "object_type": "packages"
+        },
+        {
+          "object_id": "EP1",
+          "object_type": "employees"
+        }
+      ]
+    },
+    {
+      "event_id": "e7",
+      "activity": "package delivered",
+      "timestamp": "2026-01-02T14:00:00",
+      "objects": [
+        {
+          "object_id": "P1",
+          "object_type": "packages"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+Metadata-Version: 2.4
+Name: ocpm-partial-order
+Version: 0.1.0
+Summary: Construction of partial-order instance graphs for object-centric process executions
+Requires-Python: <3.13,>=3.11
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: pm4py
+Requires-Dist: pandas
+Requires-Dist: networkx
+Requires-Dist: matplotlib
+Requires-Dist: graphviz
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"
+Requires-Dist: jupyter; extra == "dev"
+Dynamic: license-file

@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ocpm-partial-order"
+version = "0.1.0"
+description = "Construction of partial-order instance graphs for object-centric process executions"
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "pm4py",
+    "pandas",
+    "networkx",
+    "matplotlib",
+    "graphviz"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "jupyter"
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

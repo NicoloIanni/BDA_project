@@ -1,0 +1,9 @@
+pm4py
+pandas
+networkx
+matplotlib
+graphviz
+
+[dev]
+pytest
+jupyter
