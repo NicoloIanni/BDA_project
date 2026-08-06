@@ -10,6 +10,7 @@ OUTPUT_DIR = PROJECT_ROOT / "outputs"
 FIGURES_DIR = OUTPUT_DIR / "figures"
 GRAPHS_DIR = OUTPUT_DIR / "graphs"
 TABLES_DIR = OUTPUT_DIR / "tables"
+REPORTS_DIR = OUTPUT_DIR / "reports"
 
 # Dataset principale del progetto
 ORDER_MANAGEMENT_DB = RAW_DATA_DIR / "order_management.sqlite"

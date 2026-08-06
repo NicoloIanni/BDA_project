@@ -47,3 +47,16 @@ outputs/tables/*
 
 # Logs
 *.log
+
+# Python packaging metadata
+*.egg-info/
+
+# Executed notebook copies
+notebooks/*.executed.ipynb
+
+# Outputs accidentally generated from the notebooks directory
+notebooks/outputs/
+
+# Textual reports generated automatically
+outputs/reports/*
+!outputs/reports/.gitkeep
