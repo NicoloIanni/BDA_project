@@ -558,19 +558,7 @@ Obiettivi immediati:
 
 Il conformance checking e la verifica della fitness restano previsti per un blocco successivo: anticiparli nominalmente senza implementarli non aggiungerebbe alcuna validità al progetto.
 
-## 14. Ripartizione del lavoro
-
-Il progetto è sviluppato da due persone. Per il Blocco 05 la divisione proposta è:
-
-| Nicolò Ianni | Danilo La Palombara |
-| --- | --- |
-| ispezione della struttura OCPN restituita da PM4Py | studio delle causal relations nel paper e nella OCPN |
-| prototipo di estrazione delle dipendenze | casi limite con loop e attività ripetute |
-| integrazione con il caso `o-990424` | verifica indipendente degli archi ottenuti |
-
-Entrambi revisionano algoritmo, test, notebook e conclusioni prima di considerare chiuso il blocco.
-
-## 15. Riferimenti
+## 14. Riferimenti
 
 - C. Diamantini, L. Genga, D. Potena, W. M. P. van der Aalst, *Building Instance Graphs for Highly Variable Processes*, Expert Systems with Applications, 59, 101-118, 2016. [DOI: 10.1016/j.eswa.2016.04.021](https://doi.org/10.1016/j.eswa.2016.04.021).
 - J. N. Adams, D. Schuster, S. Schmitz, G. Schuh, W. M. P. van der Aalst, *Defining Cases and Variants for Object-Centric Event Data*, ICPM 2022, 128-135. [DOI: 10.1109/ICPM57379.2022.9980730](https://doi.org/10.1109/ICPM57379.2022.9980730).
