@@ -1,0 +1,32 @@
+[
+  {
+    "source_activity": "place order",
+    "target_activity": "confirm order",
+    "object_type": "orders"
+  },
+  {
+    "source_activity": "confirm order",
+    "target_activity": "pay order",
+    "object_type": "orders"
+  },
+  {
+    "source_activity": "place order",
+    "target_activity": "pick item",
+    "object_type": "items"
+  },
+  {
+    "source_activity": "pick item",
+    "target_activity": "create package",
+    "object_type": "items"
+  },
+  {
+    "source_activity": "create package",
+    "target_activity": "send package",
+    "object_type": "packages"
+  },
+  {
+    "source_activity": "send package",
+    "target_activity": "package delivered",
+    "object_type": "packages"
+  }
+]
