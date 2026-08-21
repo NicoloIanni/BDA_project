@@ -109,14 +109,6 @@ Nel progetto devono rimanere distinte almeno cinque attività:
 5. **Conformance checking**
    Verificare formalmente se la process execution può essere riprodotta dal modello.
 
-Il completamento di una fase non dimostra automaticamente il completamento delle altre.
-
-In particolare:
-
-- la discovery della OCPN non dimostra che una execution sia conforme;
-- la presenza di un percorso nella OCPN non implica necessariamente una relazione causale diretta utile per l’Instance Graph;
-- la costruzione corretta di un DAG non dimostra una fitness pari a 1;
-- la corrispondenza con il caso di studio non dimostra che le soglie scelte siano universalmente valide.
 
 ---
 
