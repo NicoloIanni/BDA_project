@@ -896,56 +896,7 @@ I risultati ottenuti costituiscono una verifica sperimentale sui casi selezionat
 
 ---
 
-## 16. Prossimi passi
-
-### 16.1 Conformance checking
-
-Studiare la disponibilità di:
-
-- token-based replay object-centric;
-- fitness per tipo di oggetto;
-- diagnostica della OCPN;
-- alignment object-centric;
-- verifica della riproducibilità delle execution.
-
-### 16.2 Estensione oltre le 22 execution
-
-Analizzare:
-
-- execution incomplete;
-- execution strutturalmente contaminate;
-- ordini collegati da oggetti condivisi;
-- casi esclusi dai criteri attuali;
-- dataset object-centric differenti.
-
-### 16.3 Stabilità delle soglie
-
-Le soglie `0.90 / 0.05 / 0.90` sono state mantenute fisse durante lo screening delle 22 execution.
-
-Il risultato riduce il rischio di overfitting sul solo `o-990424`, ma non dimostra validità universale. Sarà utile separare formalmente calibrazione e valutazione.
-
-### 16.4 Loop complessi
-
-Rimangono da analizzare:
-
-- loop che coinvolgono più attività;
-- ritorni a stati precedenti;
-- relazioni reciproche dovute a cicli;
-- transizioni differenti con la stessa etichetta;
-- distinzione tra loop e rumore statistico.
-
-### 16.5 Confronto tra sorgenti causali
-
-Confrontare:
-
-- relazioni manuali;
-- relazioni inferite dall’OC-DFG;
-- relazioni estratte dalla OCPN;
-- relazioni ottenute tramite replay o alignment.
-
----
-
-## 17. Riproducibilità
+## 16. Riproducibilità
 
 Prima di ogni commit importante eseguire:
 
@@ -985,7 +936,7 @@ LF will be replaced by CRLF
 
 ---
 
-## 18. Riferimenti
+## 17. Riferimenti
 
 - W. M. P. van der Aalst e A. Berti, *Discovering Object-Centric Petri Nets*, Fundamenta Informaticae, 175(1–4), 2020.
 - A. J. M. M. Weijters, W. M. P. van der Aalst e A. K. Alves de Medeiros, *Process Mining with the HeuristicsMiner Algorithm*, Eindhoven University of Technology, 2006.
