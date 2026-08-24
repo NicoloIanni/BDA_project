@@ -4,43 +4,51 @@ Prototipo universitario per la costruzione di **Instance Graph object-centric a 
 
 Il progetto è sviluppato da **Nicolò Ianni** e **Danilo La Palombara** nell’ambito di Big Data Analytics e Object-Centric Process Mining.
 
-> **Stato attuale:** sono state completate l’esplorazione del dataset, la discovery preliminare della Object-Centric Petri Net, la costruzione dell’Instance Graph su un esempio sintetico e su una process execution reale e la derivazione automatica di causal relations mediante filtraggio dell’Object-Centric Directly-Follows Graph.
+> **Stato attuale:** sono state completate la configurazione dell’ambiente, l’esplorazione del dataset, la discovery preliminare della Object-Centric Petri Net, la costruzione dell’Instance Graph su un esempio sintetico e su una process execution reale, la derivazione automatica delle causal relations dall’Object-Centric Directly-Follows Graph e lo screening di 22 process execution reali.
 >
-> Per l’ordine reale `o-990424` è stato costruito automaticamente un Instance Graph con 7 nodi e 6 archi. Il grafo è un DAG, è transitivamente ridotto e conserva due rami causali incomparabili.
+> Per l’ordine `o-990424` è stato costruito automaticamente un Instance Graph con 7 nodi e 6 archi. Il grafo è un DAG, è transitivamente ridotto e conserva due rami causali incomparabili.
 >
-> Le causal relations automatiche non sono ricavate direttamente dagli archi della OCPN: vengono inferite dalle frequenze dell’OC-DFG mediante dependency measure e supporto relativo. Non è stato ancora eseguito un conformance checking object-centric formale e non è stata dimostrata una fitness pari a 1.
+> La procedura deriva 26 causal relations: 22 tra attività differenti e 4 auto-relazioni. I self-loop permettono di ordinare correttamente le attività ripetute sullo stesso oggetto senza imporre un ordine tra attività uguali riferite a oggetti differenti.
+>
+> Le causal relations non sono ricavate direttamente dagli archi della OCPN: vengono inferite dalle frequenze dell’OC-DFG mediante dependency measure, supporto relativo e self-loop score. Non è stato ancora eseguito un conformance checking object-centric formale e non è stata dimostrata una fitness pari a 1.
 
 ---
 
 ## 1. Obiettivo
 
-Nel process mining tradizionale gli eventi vengono normalmente organizzati in tracce utilizzando un singolo `case_id`. Questa rappresentazione è limitante per processi nei quali uno stesso evento può coinvolgere contemporaneamente entità differenti, come:
+Nel process mining tradizionale gli eventi vengono normalmente organizzati in tracce utilizzando un singolo `case_id`. Questa rappresentazione è limitante quando uno stesso evento coinvolge contemporaneamente entità differenti, per esempio:
 
 - un ordine;
 - uno o più articoli;
-- un pacco;
+- uno o più pacchi;
 - un prodotto;
 - un dipendente.
 
-L’Object-Centric Process Mining evita di scegliere in anticipo un unico identificatore di caso e mantiene i collegamenti tra eventi e oggetti di tipi differenti.
+L’Object-Centric Process Mining evita di scegliere in anticipo un unico identificatore di caso e conserva i collegamenti tra eventi e oggetti di tipi differenti.
 
-Questo progetto adatta a tale contesto il concetto di **Instance Graph**, rappresentando una process execution mediante un grafo diretto nel quale:
+Questo progetto adatta a tale contesto il concetto di **Instance Graph**. Nel grafo:
 
-- ogni nodo rappresenta un evento;
+- ogni nodo rappresenta un evento della process execution;
 - ogni arco rappresenta una dipendenza causale ammessa;
-- ogni arco conserva i tipi e gli identificatori degli oggetti che giustificano la relazione;
-- gli eventi senza un ordine causale imposto restano incomparabili;
+- gli archi sono motivati da almeno un oggetto condiviso;
+- gli eventi privi di un ordine causale restano incomparabili;
 - la riduzione transitiva elimina gli archi ridondanti senza modificare la raggiungibilità.
 
-L’obiettivo non è trasformare la process execution in una sequenza cronologica totale. Il timestamp descrive l’ordine osservato degli eventi, ma non è sufficiente da solo a dimostrare una dipendenza causale.
+L’obiettivo non è trasformare il log in una sequenza cronologica più ordinata. Il timestamp descrive l’ordine osservato, ma non è sufficiente a dimostrare una dipendenza causale.
 
-L’obiettivo è quindi evitare che l’ordinamento temporale imponga artificialmente un ordine tra eventi che il modello causale permette di considerare indipendenti.
+Per esempio, se il pagamento viene registrato dopo la consegna, ciò non implica automaticamente:
+
+```text
+package delivered -> pay order
+```
+
+L’arco viene inserito soltanto se una causal relation applicabile e un oggetto condiviso lo giustificano.
 
 ---
 
 ## 2. Pipeline del progetto
 
-La pipeline attualmente implementata è:
+La pipeline attuale è:
 
 ```text
 OCEL 2.0 Order Management
@@ -48,100 +56,72 @@ OCEL 2.0 Order Management
         +--> esplorazione del log
         |
         +--> discovery preliminare della OCPN
-        |        |
-        |        +--> analisi diagnostica della struttura
         |
-        +--> discovery dell'OC-DFG
-        |        |
-        |        +--> dependency measure
-        |        +--> supporto relativo
-        |        +--> filtraggio delle relazioni
-        |        |
-        |        v
-        |   causal relations automatiche
+        +--> discovery dell’OC-DFG
+        |
+        +--> scoring delle relazioni
+        |       |
+        |       +--> dependency measure
+        |       +--> supporto relativo
+        |       `--> self-loop score
+        |
+        +--> causal relations filtrate
         |
         +--> estrazione order-centred
-                 |
-                 v
-          ProcessExecution interna
-                 |
-                 v
-        costruzione Instance Graph
-                 |
-                 +--> controllo DAG
-                 +--> riduzione transitiva
-                 +--> annotazione degli archi
-                 +--> eventi incomparabili
-                 +--> visualizzazione
-```
-
-La pipeline automatica viene confrontata con una baseline precedente basata su causal relations definite manualmente:
-
-```text
-ProcessExecution reale
-        +
-causal relations manuali
         |
-        v
-Instance Graph di riferimento
+        +--> adapter verso il modello interno
+        |
+        +--> costruzione dell’Instance Graph
+        |
+        +--> controllo DAG
+        +--> controllo di copertura e connessione
+        +--> riduzione transitiva
+        +--> ricerca delle coppie incomparabili
+        `--> controllo delle attività ripetute
 ```
 
-Il file manuale rimane nel repository come baseline controllata, ma non viene caricato dallo script automatico del Blocco 05.
+Le seguenti fasi devono rimanere distinte:
+
+1. **model discovery:** ricavare un modello dal log;
+2. **estrazione:** delimitare una process execution nel log object-centric;
+3. **inferenza delle causal relations:** selezionare dipendenze candidate;
+4. **costruzione dell’Instance Graph:** applicare le relazioni agli eventi e agli oggetti;
+5. **conformance checking:** verificare formalmente se l’execution è riproducibile dal modello.
+
+Completare una fase non dimostra automaticamente le altre.
 
 ---
 
-## 3. Distinzione tra le fasi
+## 3. Assunzioni e limiti metodologici
 
-Nel progetto devono rimanere distinte almeno cinque attività:
+La versione attuale assume che:
 
-1. **Model discovery**
-   Ricavare un modello di processo dal log.
-
-2. **Estrazione della process execution**
-   Delimitare gli eventi e gli oggetti che costituiscono una specifica esecuzione.
-
-3. **Inferenza delle causal relations**
-   Stabilire quali coppie di attività rappresentano dipendenze causali candidate.
-
-4. **Costruzione dell’Instance Graph**
-   Applicare le causal relations agli eventi della process execution.
-
-5. **Conformance checking**
-   Verificare formalmente se la process execution può essere riprodotta dal modello.
-
-
----
-
-## 4. Semplificazioni e limiti metodologici
-
-La prima iterazione del progetto assume volutamente che:
-
-- la process execution da analizzare possa essere estratta dal log;
-- non siano necessari repairing della execution;
-- non siano necessari inserimenti o cancellazioni di eventi;
-- non vengano ancora calcolati object-centric alignment;
-- l’algoritmo dell’Instance Graph resti indipendente dalla tecnica di estrazione;
-- il modello dati interno non dipenda dalle classi private di PM4Py o OCPA;
+- la process execution venga estratta con una regola order-centred;
+- la chiusura strutturale segua `orders -> items -> packages`;
+- `products` ed `employees` non vengano attraversati durante l’espansione;
 - le causal relations siano rappresentate a livello di attività e tipo di oggetto;
-- non siano ancora risolti in modo generale tutti i casi con loop, attività ripetute o transizioni diverse aventi la stessa etichetta.
+- non siano necessari repairing, inserimenti o cancellazioni di eventi;
+- non vengano ancora calcolati object-centric alignment;
+- non sia stato ancora eseguito un token-based replay object-centric;
+- i self-loop di lunghezza 1 siano gestiti mediante una soglia dedicata;
+- i loop complessi non siano ancora gestiti in modo generale;
+- l’algoritmo rimanga indipendente dalle classi private di PM4Py o OCPA.
 
-Nel Blocco 04 le causal relations erano fornite manualmente.
-
-Nel Blocco 05 è stata aggiunta una derivazione automatica basata sull’OC-DFG. Questa costituisce un avanzamento rispetto alla baseline manuale, ma non equivale a una derivazione formale delle relazioni direttamente dalla semantica di esecuzione della OCPN.
+`products` ed `employees` vengono conservati negli eventi estratti, ma non vengono usati per espandere la execution. Nel dataset sono oggetti condivisi trasversalmente e potrebbero collegare ordini differenti in una connected component molto grande.
 
 ---
 
-## 5. Dataset Order Management
+## 4. Dataset Order Management
 
-Il dataset ufficiale del progetto è **Order Management**, memorizzato localmente in formato OCEL 2.0 SQLite:
+Il dataset principale è **Order Management**, memorizzato localmente in formato OCEL 2.0 SQLite:
 
 ```text
 data/raw/order_management.sqlite
 ```
 
-Il dataset non viene incluso nel repository e deve essere copiato manualmente nella cartella indicata.
+Il file non viene versionato e deve essere copiato manualmente nella cartella indicata.
 
-L’esplorazione eseguita nel notebook `02_ocel_exploration.ipynb` ha prodotto i seguenti risultati:
+L’esplorazione ha prodotto:
 
 | Misura | Valore |
 | --- | ---: |
@@ -151,7 +131,7 @@ L’esplorazione eseguita nel notebook `02_ocel_exploration.ipynb` ha prodotto i
 | Attività | 11 |
 | Tipi di oggetto | 5 |
 
-I tipi di oggetto presenti sono:
+I tipi di oggetto sono:
 
 - `orders`;
 - `items`;
@@ -159,439 +139,101 @@ I tipi di oggetto presenti sono:
 - `products`;
 - `employees`.
 
-Il log contiene solamente 20 prodotti e 18 dipendenti, condivisi trasversalmente tra numerosi ordini.
+Distribuzione degli oggetti:
 
-Questa struttura rende pericolosa un’espansione indiscriminata basata sulle connected components: gli oggetti `products` ed `employees` possono comportarsi come ponti e collegare process execution appartenenti a ordini differenti.
+| Tipo | Numero |
+| --- | ---: |
+| `items` | 7.659 |
+| `orders` | 2.000 |
+| `packages` | 1.128 |
+| `products` | 20 |
+| `employees` | 18 |
 
-Per il primo caso reale è stata quindi adottata un’estrazione **order-centred**.
+Il numero ridotto di prodotti e dipendenti rispetto al numero di ordini rende pericolosa un’espansione indiscriminata per connected components: questi oggetti possono comportarsi come ponti tra esecuzioni differenti.
 
 ---
 
-## 6. Stato dei blocchi
+## 5. Sviluppo del progetto
 
-### Blocco 01 — Configurazione dell’ambiente
+### Configurazione dell’ambiente
 
 L’ambiente è stato configurato e verificato su Windows con:
 
-- Python 3.12.0;
-- ambiente virtuale `.venv`;
-- PM4Py 2.7.23.3;
-- pandas 3.0.5;
-- NetworkX 3.6.1;
-- Matplotlib 3.11.1;
-- Graphviz Python package 0.21;
-- pytest 9.1.1;
-- Jupyter;
-- ipykernel.
+- Python 3.12;
+- virtual environment locale `.venv`;
+- PM4Py;
+- pandas;
+- NetworkX;
+- Matplotlib;
+- Graphviz;
+- pytest;
+- Jupyter e ipykernel.
 
-L’interprete della virtual environment viene richiamato esplicitamente:
-
-```powershell
-.\.venv\Scripts\python.exe
-```
-
-Questo evita di eseguire accidentalmente gli script con l’installazione globale di Python.
-
----
-
-### Blocco 02 — Esplorazione dell’OCEL
+### Esplorazione dell’OCEL
 
 Il notebook `02_ocel_exploration.ipynb`:
 
-- carica il file SQLite OCEL 2.0;
-- analizza eventi, oggetti e relazioni evento-oggetto;
-- conta le attività e i tipi di oggetto;
+- carica l’OCEL 2.0 SQLite;
+- analizza eventi, oggetti e relazioni;
+- conta attività e tipi di oggetto;
 - misura quanti oggetti sono associati agli eventi;
-- analizza la condivisione degli oggetti;
-- documenta il rischio di un’espansione eccessiva attraverso `products` ed `employees`.
+- documenta il rischio degli oggetti condivisi.
 
-Questa fase guida la scelta della strategia di estrazione, ma non modifica la logica centrale dell’Instance Graph.
+### Discovery preliminare della OCPN
 
----
+Il notebook `03_ocpn_discovery.ipynb` usa PM4Py per scoprire una Object-Centric Petri Net.
 
-### Blocco 03 — Discovery preliminare della OCPN
-
-Il notebook `03_ocpn_discovery.ipynb` usa PM4Py per effettuare la discovery preliminare di una Object-Centric Petri Net.
-
-La funzione utilizzata è:
-
-```python
-pm4py.discover_oc_petri_net(ocel)
-```
-
-La versione di PM4Py usata nel progetto espone i seguenti parametri principali:
-
-- `inductive_miner_variant`;
-- `noise_threshold`;
-- `multi_processing`;
-- `disable_fallthroughs`;
-- `disable_strict_sequence_cut`;
-- `diagnostics_with_tbr`.
-
-Il risultato della discovery comprende:
+Il risultato comprende:
 
 - 11 attività;
 - 5 tipi di oggetto;
-- una Petri net per ogni tipo di oggetto;
+- una Petri net per ciascun tipo;
 - attività iniziali e finali;
-- informazioni sugli archi;
-- informazioni sulle molteplicità;
-- dati prestazionali.
+- informazioni su archi, molteplicità e prestazioni.
 
-Il notebook è stato eseguito integralmente senza errori.
-
-Questa fase dimostra la discovery del modello, non la conformità delle process execution.
-
-In particolare, i risultati di token-based replay non sono stati utilizzati per dimostrare una fitness pari a 1.
-
----
+Questa fase dimostra la discovery del modello, non la conformità delle execution. Non è stata dimostrata una fitness pari a 1.
 
 ### Prototipo preliminare — Toy example
 
-Prima di usare il dataset reale è stata verificata la pipeline su una process execution sintetica controllata del dominio Order Management.
-
-Il toy example comprende:
+Prima del dataset reale è stata verificata la pipeline su un esempio sintetico controllato:
 
 - 7 eventi;
 - 6 causal relations manuali;
 - costruzione dell’Instance Graph;
-- controllo che il grafo sia un DAG;
+- controllo DAG;
 - riduzione transitiva;
 - ricerca delle coppie incomparabili;
-- generazione di una figura PNG mediante Graphviz;
+- generazione PNG;
 - confronto tra due linearizzazioni temporali equivalenti.
 
-Il test sulle linearizzazioni verifica che l’inversione temporale di due eventi appartenenti a rami causali indipendenti produca lo stesso Instance Graph.
+Il test centrale dimostra che l’inversione temporale di due eventi appartenenti a rami indipendenti produce lo stesso grafo causale.
 
-Questo risultato vale per il toy example e non costituisce una dimostrazione generale su tutte le process execution del dataset.
+### Instance Graph su una execution reale
 
----
+Il primo caso reale è l’ordine `o-990424`:
 
-### Blocco 04 — Instance Graph su una execution reale
-
-Il Blocco 04 applica la pipeline all’ordine reale:
-
-```text
-o-990424
-```
-
-#### Estrazione order-centred
-
-L’estrazione segue questo criterio:
-
-1. seleziona `o-990424` come leading object;
-2. individua gli `items` collegati all’ordine;
-3. individua i `packages` collegati agli item;
-4. seleziona gli eventi appartenenti alla porzione individuata;
-5. conserva, per ogni evento, i riferimenti agli oggetti coinvolti;
-6. impedisce l’espansione verso oggetti strutturali appartenenti ad altri ordini.
-
-`products` ed `employees` non vengono usati per espandere la process execution perché sono oggetti informativi condivisi tra numerosi ordini.
-
-Non vengono rimossi dal dataset: vengono esclusi solamente dalla regola di espansione.
-
-La funzione pubblica utilizzata è:
-
-```python
-extract_order_centred_execution(
-    ocel=ocel,
-    order_id="o-990424",
-)
-```
-
-L’adapter converte gli eventi OCEL selezionati nel modello interno `ProcessExecution`, mantenendo separati:
-
-- il codice di caricamento;
-- la strategia di estrazione;
-- la rappresentazione interna;
-- la costruzione del grafo.
-
-#### Baseline con causal relations manuali
-
-Le sei causal relations della baseline sono caricate da:
-
-```text
-data/derived/order_management_o_990424_causal_relations.json
-```
-
-Ogni relazione specifica:
-
-- attività sorgente;
-- attività destinazione;
-- tipo di oggetto che giustifica il collegamento.
-
-Le relazioni contenute in questo file sono state definite manualmente.
-
-Il file rimane utile come:
-
-- baseline controllata;
-- riferimento per i test;
-- confronto con la derivazione automatica;
-- documentazione esplicita dell’ipotesi causale iniziale.
-
-#### Risultato della baseline
-
-Per l’ordine `o-990424` sono stati ottenuti:
-
-| Proprietà | Risultato |
+| Proprietà | Valore |
 | --- | ---: |
-| Eventi/nodi | 7 |
-| Archi causali | 6 |
-| Grafo diretto aciclico | sì |
-| Grafo transitivamente ridotto | sì |
-| Coppie incomparabili | 8 |
+| Eventi | 7 |
+| Ordini | 1 |
+| Item | 1 |
+| Pacchi | 1 |
 
-La topologia ottenuta è:
+L’estrazione order-centred segue:
 
 ```text
-                 confirm order -> pay order
-                /
-place order ---
-                \
-                 pick item -> create package -> send package
-                                              -> package delivered
+order -> items -> packages
 ```
 
-Rappresentata senza la disposizione grafica:
+La baseline usa sei causal relations manuali e produce:
 
 ```text
 place order -> confirm order -> pay order
-place order -> pick item -> create package
-create package -> send package -> package delivered
+     |
+     `-> pick item -> create package -> send package -> package delivered
 ```
 
-Gli archi della baseline manuale sono:
-
-| Sorgente | Destinazione | Tipo di oggetto |
-| --- | --- | --- |
-| `place order` | `confirm order` | `orders` |
-| `confirm order` | `pay order` | `orders` |
-| `place order` | `pick item` | `items` |
-| `pick item` | `create package` | `items` |
-| `create package` | `send package` | `packages` |
-| `send package` | `package delivered` | `packages` |
-
-Dopo `place order` emergono due rami distinti:
-
-- ramo amministrativo: `confirm order -> pay order`;
-- ramo logistico: `pick item -> create package -> send package -> package delivered`.
-
-I due eventi del ramo amministrativo sono incomparabili con i quattro eventi del ramo logistico:
-
-```text
-2 × 4 = 8 coppie incomparabili
-```
-
-`pay order` possiede un timestamp successivo a `package delivered`, ma il grafo non contiene l’arco:
-
-```text
-package delivered -> pay order
-```
-
-Il timestamp stabilisce una successione osservata, ma da solo non dimostra una dipendenza causale.
-
----
-
-### Blocco 05 — Derivazione automatica delle causal relations
-
-Il Blocco 05 sostituisce, nella nuova pipeline, il file di causal relations manuali con una procedura automatica.
-
-Il lavoro è stato diviso in due analisi:
-
-1. tentativo di estrazione delle relazioni dalla struttura delle Petri net per tipo di oggetto;
-2. inferenza statistica delle relazioni a partire dall’OC-DFG.
-
-#### Analisi della struttura della OCPN
-
-Sono state analizzate le Petri net scoperte da PM4Py per i tipi:
-
-- `orders`;
-- `items`;
-- `packages`.
-
-Per `orders` e `packages`, la raggiungibilità tra transizioni visibili ha prodotto relazioni coerenti con il caso di studio.
-
-Per `items`, invece, la net scoperta presenta una struttura fortemente ciclica e generalizzante. Numerose transizioni visibili condividono le stesse regioni della rete e risultano reciprocamente raggiungibili.
-
-Il risultato della raggiungibilità visibile è stato:
-
-| Tipo | Relazioni totali | Relazioni rilevanti | Attese presenti | Aggiuntive |
-| --- | ---: | ---: | ---: | ---: |
-| `orders` | 5 | 2 | 2/2 | 0 |
-| `items` | 110 | 42 | 2/2 | 40 |
-| `packages` | 5 | 2 | 2/2 | 0 |
-
-Nel caso `items`, la sola raggiungibilità strutturale accetta quasi tutte le direzioni tra le attività del caso reale, comprese relazioni reciproche e auto-relazioni.
-
-Per questo motivo non viene utilizzata come sorgente finale delle causal relations.
-
-Questa analisi rimane comunque utile perché documenta un limite concreto dell’estrazione ingenua dalla OCPN scoperta.
-
-#### Verifica dei parametri dell’Inductive Miner
-
-Sono state confrontate diverse configurazioni della discovery:
-
-- `im` con soglia di rumore `0.0`;
-- `imf` con soglie `0.05`, `0.10`, `0.20` e `0.30`.
-
-Le configurazioni `imf` fino a `0.20` non modificano la struttura problematica della net `items`.
-
-Con soglia `0.30`, la struttura cambia sensibilmente, ma viene persa la relazione attesa:
-
-```text
-pick item -> create package
-```
-
-Il semplice aumento della soglia di rumore non risolve quindi il problema in modo soddisfacente.
-
-#### Utilizzo dell’OC-DFG
-
-La soluzione adottata usa l’Object-Centric Directly-Follows Graph scoperto dal log.
-
-Per ogni tipo di oggetto e per ogni coppia di attività `(a, b)` vengono considerate:
-
-- la frequenza `f(a,b)` della relazione diretta `a -> b`;
-- la frequenza opposta `f(b,a)`;
-- la dependency measure;
-- il supporto relativo rispetto alle relazioni uscenti da `a`.
-
-La dependency measure utilizzata è:
-
-```text
-dependency(a,b) =
-    (f(a,b) - f(b,a))
-    /
-    (f(a,b) + f(b,a) + 1)
-```
-
-Il supporto relativo è:
-
-```text
-relative_support(a,b) =
-    f(a,b)
-    /
-    max_y f(a,y)
-```
-
-dove il denominatore rappresenta la massima frequenza di un arco uscente dall’attività `a`, per lo stesso tipo di oggetto.
-
-Una relazione viene selezionata quando soddisfa entrambe le condizioni:
-
-```text
-dependency(a,b) >= dependency_threshold
-```
-
-e:
-
-```text
-relative_support(a,b) >= relative_support_threshold
-```
-
-Le auto-relazioni vengono escluse dalla selezione.
-
-#### Soglie adottate
-
-I valori predefiniti scelti sono:
-
-```text
-dependency_threshold = 0.90
-relative_support_threshold = 0.05
-```
-
-Questi valori sono stati verificati mediante un’analisi di sensibilità.
-
-Le soglie considerate sono state:
-
-```text
-dependency:
-0.80, 0.85, 0.90, 0.95, 0.97, 0.98
-
-relative support:
-0.01, 0.05, 0.10, 0.20
-```
-
-La topologia esatta del caso di riferimento è stata ottenuta per tutte le combinazioni con:
-
-```text
-dependency compresa tra 0.80 e 0.97
-relative support compreso tra 0.05 e 0.20
-```
-
-Si tratta di 15 configurazioni esatte.
-
-Con supporto relativo `0.01` viene aggiunta la relazione:
-
-```text
-pick item -> send package
-```
-
-Con dependency `0.98` viene invece eliminata la relazione:
-
-```text
-pick item -> create package
-```
-
-La configurazione `0.90 / 0.05` non rappresenta quindi un singolo punto isolato che funziona per caso, ma appartiene a una regione stabile rispetto al caso di studio.
-
-Questa stabilità è stata verificata esclusivamente rispetto a `o-990424` e non dimostra la validità universale delle soglie.
-
-#### Evidenze principali
-
-Alcune delle relazioni più rilevanti osservate nell’OC-DFG sono:
-
-| Tipo | Relazione | Forward | Backward | Dependency | Supporto relativo |
-| --- | --- | ---: | ---: | ---: | ---: |
-| `orders` | `place order -> confirm order` | 2000 | 0 | 1.000 | 1.000 |
-| `orders` | `confirm order -> pay order` | 1557 | 0 | 0.999 | 1.000 |
-| `items` | `place order -> pick item` | 1915 | 0 | 0.999 | 1.000 |
-| `items` | `pick item -> create package` | 5290 | 66 | 0.975 | 1.000 |
-| `items` | `create package -> send package` | 1122 | 0 | 0.999 | 1.000 |
-| `items` | `send package -> package delivered` | 913 | 0 | 0.999 | 1.000 |
-| `packages` | `create package -> send package` | 1128 | 0 | 0.999 | 1.000 |
-| `packages` | `send package -> package delivered` | 914 | 0 | 0.999 | 1.000 |
-
-La relazione `pick item -> create package` è il caso più vicino alla soglia:
-
-```text
-forward = 5290
-backward = 66
-dependency = 0.975
-```
-
-Per questo motivo una dependency threshold pari a `0.98` la elimina.
-
-#### Risultato della derivazione automatica
-
-La procedura automatica seleziona:
-
-```text
-22 causal relations complessive
-```
-
-considerando tutte le attività e i tipi di oggetto rilevanti dell’OC-DFG.
-
-Tra queste, 10 sono applicabili alle attività e agli oggetti presenti nella process execution di `o-990424`:
-
-| Sorgente | Destinazione | Tipo |
-| --- | --- | --- |
-| `confirm order` | `pay order` | `items` |
-| `confirm order` | `pay order` | `orders` |
-| `create package` | `send package` | `items` |
-| `create package` | `send package` | `packages` |
-| `pick item` | `create package` | `items` |
-| `place order` | `confirm order` | `items` |
-| `place order` | `confirm order` | `orders` |
-| `place order` | `pick item` | `items` |
-| `send package` | `package delivered` | `items` |
-| `send package` | `package delivered` | `packages` |
-
-Più causal relations riferite a tipi di oggetto differenti possono produrre lo stesso arco tra due eventi.
-
-Per questo motivo le 10 relazioni rilevanti producono comunque esattamente 6 archi nel grafo.
-
-#### Instance Graph automatico
-
-Il grafo costruito con le relazioni derivate automaticamente possiede:
+Il grafo possiede:
 
 | Proprietà | Risultato |
 | --- | ---: |
@@ -600,51 +242,252 @@ Il grafo costruito con le relazioni derivate automaticamente possiede:
 | DAG | sì |
 | Transitivamente ridotto | sì |
 | Coppie incomparabili | 8 |
-| Archi attesi mancanti | 0 |
-| Archi aggiuntivi | 0 |
 
-Gli archi e le relative annotazioni sono:
+### Derivazione automatica delle causal relations
 
-| Sorgente | Destinazione | Tipi di oggetto | Identificatori |
-| --- | --- | --- | --- |
-| `place order` | `confirm order` | `items`, `orders` | `i-881734`, `o-990424` |
-| `confirm order` | `pay order` | `items`, `orders` | `i-881734`, `o-990424` |
-| `place order` | `pick item` | `items` | `i-881734` |
-| `pick item` | `create package` | `items` | `i-881734` |
-| `create package` | `send package` | `items`, `packages` | `i-881734`, `p-660247` |
-| `send package` | `package delivered` | `items`, `packages` | `i-881734`, `p-660247` |
+Una derivazione basata sulla semplice raggiungibilità nella OCPN è risultata troppo permissiva, soprattutto per il tipo `items`, la cui rete è ciclica e generalizzante.
 
-La topologia coincide esattamente con quella della baseline manuale:
+È stata quindi adottata una soluzione basata sull’OC-DFG.
+
+Per attività differenti viene calcolata la dependency measure:
 
 ```text
-place order -> confirm order -> pay order
-place order -> pick item -> create package
-create package -> send package -> package delivered
+dependency(A, B) =
+    (f(A, B) - f(B, A))
+    / (f(A, B) + f(B, A) + 1)
 ```
 
-Le annotazioni automatiche sono più ricche rispetto alla baseline manuale perché una stessa relazione può essere supportata da più tipi di oggetto.
-
-La figura viene salvata in:
+Il supporto relativo è:
 
 ```text
-outputs/graphs/order_management_o_990424_discovered_instance_graph.png
+relative_support(A, B) =
+    f(A, B)
+    / max_y f(A, y)
 ```
 
-#### Interpretazione metodologica
+Le soglie iniziali sono:
 
-Il risultato corretto deve essere descritto nel modo seguente:
+| Parametro | Valore |
+| --- | ---: |
+| Dependency threshold | `0.90` |
+| Supporto relativo | `0.05` |
 
-> Le causal relations sono inferite automaticamente dall’OC-DFG mediante dependency measure e supporto relativo e vengono successivamente applicate alla process execution estratta.
+Prima dell’estensione ai self-loop, la procedura selezionava 22 relazioni tra attività differenti. Dieci erano applicabili a `o-990424` e producevano esattamente i sei archi della baseline manuale.
 
-Non deve essere descritto come:
+La sensitivity analysis ha valutato 24 combinazioni di soglie. La topologia attesa è stata mantenuta in 15 configurazioni.
 
-> Le causal relations sono lette direttamente dagli archi della OCPN.
+### Screening e self-loop
 
-La OCPN viene scoperta e analizzata, ma la sorgente operativa delle relazioni automatiche del Blocco 05 è l’OC-DFG filtrato.
+Lo screening estende la valutazione a tutte le 22 process execution complete e non contaminate individuate dal diagnostico.
+
+#### Self-loop score
+
+La prima versione escludeva le relazioni in cui sorgente e destinazione coincidevano. Ciò rendeva incomparabili tentativi di consegna consecutivi sullo stesso pacco.
+
+Per le auto-relazioni viene ora usato:
+
+```text
+self_loop_score(A) =
+    f(A, A) / (f(A, A) + 1)
+```
+
+La soglia è:
+
+```text
+self_loop_threshold = 0.90
+```
+
+La procedura deriva quattro auto-relazioni:
+
+| Tipo | Relazione |
+| --- | --- |
+| `orders` | `payment reminder -> payment reminder` |
+| `items` | `payment reminder -> payment reminder` |
+| `items` | `failed delivery -> failed delivery` |
+| `packages` | `failed delivery -> failed delivery` |
+
+Il totale passa quindi a:
+
+```text
+26 causal relations
+```
+
+di cui:
+
+- 22 tra attività differenti;
+- 4 auto-relazioni.
+
+#### Screening delle 22 execution
+
+Lo script `screen_order_executions.py` controlla per ogni execution:
+
+- DAG;
+- connessione debole;
+- copertura completa degli eventi;
+- assenza di nodi isolati;
+- riduzione transitiva;
+- coppie incomparabili;
+- sorgenti e pozzi;
+- attività ripetute incomparabili sullo stesso oggetto.
+
+Risultato:
+
+| Misura | Valore |
+| --- | ---: |
+| Execution previste | 22 |
+| Execution superate | 22 |
+| Execution fallite | 0 |
+| Grafi DAG | 22 |
+| Grafi debolmente connessi | 22 |
+| Grafi transitivamente ridotti | 22 |
+| Execution con eventi isolati | 0 |
+| Ripetizioni sospette | 0 |
+
+I casi comprendono:
+
+- 13 execution senza eccezioni;
+- 9 execution con eccezioni;
+- 3 execution con più di un pacco;
+- da 1 a 8 item;
+- fino a 22 eventi.
+
+#### Caso `o-990254`
+
+Due `failed delivery` sullo stesso pacco formano ora:
+
+```text
+fail_p-660164_54
+    -> fail_p-660164_56
+```
+
+Le coppie incomparabili passano da 105 a 104.
+
+#### Caso `o-990042`
+
+Sette `failed delivery` sullo stesso pacco formano:
+
+```text
+fail_p-660027_4
+    -> fail_p-660027_6
+    -> fail_p-660027_7
+    -> fail_p-660027_8
+    -> fail_p-660027_9
+    -> fail_p-660027_11
+    -> fail_p-660027_12
+```
+
+Sette eventi generano 21 coppie possibili:
+
+```text
+7 * 6 / 2 = 21
+```
+
+Prima della correzione tutte risultavano incomparabili. Dopo la correzione, le coppie incomparabili complessive passano da 92 a 71.
+
+#### Attività uguali su oggetti differenti
+
+Il self-loop viene applicato all’interno del ciclo di vita dello stesso oggetto.
+
+I due eventi `pick item` di `o-990878` appartengono a item differenti e restano incomparabili:
+
+```text
+pick_i-883511 || pick_i-883512
+```
 
 ---
 
-## 7. Struttura del repository
+## 6. Modello dati interno
+
+L’algoritmo non dipende direttamente dalle rappresentazioni interne di PM4Py o OCPA.
+
+### `ObjectReference`
+
+Rappresenta un oggetto associato a un evento:
+
+- `object_id`;
+- `object_type`.
+
+### `ExecutionEvent`
+
+Rappresenta un evento:
+
+- `event_id`;
+- `activity`;
+- `timestamp`;
+- insieme di `ObjectReference`.
+
+### `ProcessExecution`
+
+Contiene gli eventi di una execution e permette di ottenere:
+
+- identificatori degli eventi;
+- oggetti coinvolti;
+- eventi associati a un oggetto.
+
+### `CausalRelation`
+
+Descrive una relazione causale ammessa:
+
+- `source_activity`;
+- `target_activity`;
+- `object_type`.
+
+### `CausalRelationEvidence`
+
+Documenta le misure associate a una relazione candidata:
+
+- frequenza forward;
+- frequenza backward;
+- dependency measure;
+- supporto relativo;
+- self-loop score, se sorgente e destinazione coincidono.
+
+---
+
+## 7. Costruzione dell’Instance Graph
+
+Per ogni oggetto strutturale, l’algoritmo:
+
+1. raccoglie gli eventi associati;
+2. li ordina deterministicamente per timestamp e `event_id`;
+3. verifica se le attività corrispondono a una causal relation;
+4. crea un arco solo tra eventi che condividono l’oggetto;
+5. unisce le annotazioni se lo stesso arco è supportato da più oggetti;
+6. controlla l’assenza di cicli;
+7. applica la riduzione transitiva.
+
+Ogni arco conserva:
+
+- i tipi di oggetto che lo giustificano;
+- gli identificatori degli oggetti coinvolti.
+
+Le relazioni vengono applicate alle singole occorrenze degli eventi, non soltanto alle etichette astratte delle attività.
+
+---
+
+## 8. Incomparabilità e parallelismo potenziale
+
+Due eventi sono incomparabili quando non esiste un percorso causale in nessuna direzione:
+
+```text
+not path(A, B) and not path(B, A)
+```
+
+Nel prototipo queste coppie sono candidate al parallelismo.
+
+L’incomparabilità non dimostra da sola che due eventi siano realmente paralleli. Può anche dipendere da:
+
+- relazioni causali mancanti;
+- soglie troppo restrittive;
+- rumore nel log;
+- limiti del modello;
+- semantica non rappresentata.
+
+Per questo motivo viene usata come proprietà del grafo, non come prova definitiva di concorrenza reale.
+
+---
+
+## 9. Struttura del repository
 
 ```text
 ocpm-partial-order/
@@ -662,7 +505,6 @@ ocpm-partial-order/
 |   |-- 01_environment_check.ipynb
 |   |-- 02_ocel_exploration.ipynb
 |   |-- 03_ocpn_discovery.ipynb
-|   |-- 03_ocpn_discovery.executed.ipynb
 |   |-- 04_real_instance_graph.ipynb
 |   |-- 05_instance_graph.ipynb
 |   `-- 06_real_execution.ipynb
@@ -672,8 +514,11 @@ ocpm-partial-order/
 |   |-- graphs/
 |   |   |-- order_management_toy_instance_graph.png
 |   |   |-- order_management_o_990424_instance_graph.png
-|   |   `-- order_management_o_990424_discovered_instance_graph.png
+|   |   |-- order_management_o_990424_discovered_instance_graph.png
+|   |   |-- order_management_o-990254_execution_screening.png
+|   |   `-- order_management_o-990042_execution_screening.png
 |   |-- reports/
+|   |   `-- execution_screening.txt
 |   `-- tables/
 |
 |-- scripts/
@@ -684,42 +529,30 @@ ocpm-partial-order/
 |   |-- run_order_management_real.py
 |   |-- run_order_management_discovered.py
 |   |-- run_toy_example.py
+|   |-- screen_order_executions.py
 |   `-- verify_real_execution.py
 |
-|-- src/
-|   `-- ocpm_partial_order/
-|       |-- __init__.py
-|       |-- config.py
-|       |
-|       |-- discovery/
-|       |   |-- __init__.py
-|       |   |-- causal_relations.py
-|       |   `-- ocpn_discovery.py
-|       |
-|       |-- domain/
-|       |   |-- __init__.py
-|       |   |-- causal_relation.py
-|       |   |-- event.py
-|       |   `-- process_execution.py
-|       |
-|       |-- extraction/
-|       |   |-- __init__.py
-|       |   `-- execution_adapter.py
-|       |
-|       |-- graphs/
-|       |   |-- __init__.py
-|       |   |-- concurrency.py
-|       |   |-- instance_graph.py
-|       |   `-- validation.py
-|       |
-|       |-- io/
-|       |   |-- __init__.py
-|       |   |-- ocel_loader.py
-|       |   `-- sample_loader.py
-|       |
-|       `-- visualization/
-|           |-- __init__.py
-|           `-- graph_visualizer.py
+|-- src/ocpm_partial_order/
+|   |-- config.py
+|   |-- discovery/
+|   |   |-- __init__.py
+|   |   |-- causal_relations.py
+|   |   `-- ocpn_discovery.py
+|   |-- domain/
+|   |   |-- causal_relation.py
+|   |   |-- event.py
+|   |   `-- process_execution.py
+|   |-- extraction/
+|   |   `-- execution_adapter.py
+|   |-- graphs/
+|   |   |-- concurrency.py
+|   |   |-- instance_graph.py
+|   |   `-- validation.py
+|   |-- io/
+|   |   |-- ocel_loader.py
+|   |   `-- sample_loader.py
+|   `-- visualization/
+|       `-- graph_visualizer.py
 |
 |-- tests/
 |   |-- fixtures/
@@ -730,6 +563,7 @@ ocpm-partial-order/
 |   |-- test_execution_adapter.py
 |   |-- test_instance_graph.py
 |   |-- test_real_instance_graph.py
+|   |-- test_real_self_loops.py
 |   `-- test_sample_loader.py
 |
 |-- .gitignore
@@ -738,222 +572,19 @@ ocpm-partial-order/
 `-- README.md
 ```
 
-Alcuni notebook futuri possono essere presenti come file vuoti o segnaposto. La loro presenza nel repository non implica che il relativo blocco sia già stato completato.
+Gli artefatti in `outputs/` sono rigenerabili e possono essere esclusi dal versionamento.
 
-Gli artefatti contenuti in `outputs/` sono rigenerabili.
-
-Il dataset contenuto in `data/raw/` resta locale e non deve essere versionato.
-
-Il file in `data/derived/` rappresenta invece la baseline manuale del caso reale ed è un input riproducibile dei test precedenti.
+Il dataset in `data/raw/` resta locale. Il file in `data/derived/` rappresenta invece la baseline manuale riproducibile.
 
 ---
 
-## 8. Modello dati interno
-
-L’algoritmo non usa direttamente le rappresentazioni interne di PM4Py o OCPA.
-
-### `ObjectReference`
-
-Rappresenta un oggetto coinvolto in un evento:
-
-- `object_id`;
-- `object_type`.
-
-### `ExecutionEvent`
-
-Rappresenta un evento della process execution:
-
-- `event_id`;
-- `activity`;
-- `timestamp`;
-- insieme di `ObjectReference`.
-
-### `ProcessExecution`
-
-Contiene gli eventi di una process execution e offre metodi per ottenere:
-
-- gli ID degli eventi;
-- gli oggetti coinvolti;
-- gli eventi associati a un oggetto specifico.
-
-### `CausalRelation`
-
-Descrive una relazione causale ammessa per uno specifico tipo di oggetto:
-
-- `source_activity`;
-- `target_activity`;
-- `object_type`.
-
-La classe è immutabile e può essere usata all’interno di insiemi.
-
-### `CausalRelationEvidence`
-
-Rappresenta le evidenze statistiche associate a una causal relation candidata.
-
-Contiene le informazioni necessarie per documentare e verificare la selezione, tra cui:
-
-- attività sorgente;
-- attività destinazione;
-- tipo di oggetto;
-- frequenza forward;
-- frequenza backward;
-- dependency measure;
-- supporto relativo.
-
-Questa separazione permette di cambiare:
-
-- dataset;
-- libreria;
-- tecnica di estrazione;
-- tecnica di discovery;
-- strategia di filtraggio;
-
-senza riscrivere la logica centrale dell’Instance Graph.
-
----
-
-## 9. Derivazione delle causal relations
-
-Il modulo:
-
-```text
-src/ocpm_partial_order/discovery/causal_relations.py
-```
-
-espone due operazioni principali:
-
-```python
-score_causal_relations(...)
-derive_causal_relations(...)
-```
-
-### `score_causal_relations`
-
-Calcola le evidenze per le relazioni candidate presenti nell’OC-DFG.
-
-Il risultato può essere usato per:
-
-- ispezionare le frequenze;
-- confrontare le direzioni opposte;
-- analizzare la dependency measure;
-- analizzare il supporto relativo;
-- effettuare sensitivity analysis;
-- spiegare perché una relazione è stata inclusa o esclusa.
-
-### `derive_causal_relations`
-
-Filtra le relazioni candidate e restituisce le `CausalRelation` che superano le soglie configurate.
-
-Le soglie predefinite sono:
-
-```python
-dependency_threshold = 0.90
-relative_support_threshold = 0.05
-```
-
-La funzione:
-
-- valida che le soglie appartengano all’intervallo `[0, 1]`;
-- rifiuta tipi di oggetto sconosciuti;
-- esclude le auto-relazioni;
-- confronta la frequenza forward con quella backward;
-- filtra il rumore mediante supporto relativo;
-- restituisce relazioni indipendenti dalla rappresentazione interna del grafo finale.
-
-Le soglie sono parametri espliciti e possono essere modificate senza cambiare l’algoritmo di costruzione dell’Instance Graph.
-
----
-
-## 10. Costruzione dell’Instance Graph
-
-La funzione principale è:
-
-```python
-build_instance_graph(
-    execution,
-    causal_relations,
-)
-```
-
-Il procedimento implementato:
-
-1. valida la process execution;
-2. crea un nodo per ogni evento;
-3. salva nei nodi attività, timestamp e oggetti;
-4. raggruppa le causal relations per tipo di oggetto;
-5. ricostruisce il ciclo di vita di ogni oggetto;
-6. ordina gli eventi dell’oggetto;
-7. esamina le coppie di eventi nello stesso ciclo di vita;
-8. aggiunge un arco quando la coppia di attività è ammessa per quel tipo di oggetto;
-9. unisce le evidenze quando lo stesso arco è giustificato da più oggetti;
-10. annota gli archi con `object_types` e `object_ids`;
-11. verifica che il grafo sia un DAG;
-12. applica la riduzione transitiva;
-13. ripristina gli attributi non conservati automaticamente da NetworkX;
-14. valida nuovamente il grafo ridotto.
-
-NetworkX definisce la riduzione transitiva di un DAG come il grafo che conserva la stessa raggiungibilità eliminando gli archi per i quali esiste già un cammino alternativo.
-
-L’algoritmo riceve un insieme di `CausalRelation` e non dipende dal modo in cui queste sono state ottenute.
-
-Può quindi essere usato sia con:
-
-- causal relations manuali;
-- causal relations inferite automaticamente;
-- eventuali tecniche di discovery future.
-
----
-
-## 11. Incomparabilità e parallelismo potenziale
-
-La funzione:
-
-```python
-find_incomparable_event_pairs(graph)
-```
-
-considera due eventi incomparabili quando non esiste:
-
-- un cammino dal primo evento al secondo;
-- né un cammino dal secondo evento al primo.
-
-Nel progetto viene adottata la formulazione prudente:
-
-```text
-incomparabilità = candidato al parallelismo
-```
-
-L’incomparabilità non dimostra che due eventi siano avvenuti simultaneamente.
-
-Dimostra solamente che l’Instance Graph costruito non impone un ordine causale tra i due eventi.
-
-Nel caso reale, le coppie incomparabili sono:
-
-```text
-confirm order || pick item
-confirm order || create package
-confirm order || send package
-confirm order || package delivered
-
-pay order || pick item
-pay order || create package
-pay order || send package
-pay order || package delivered
-```
-
-Sono quindi presenti 8 coppie incomparabili.
-
----
-
-## 12. Installazione su Windows
+## 10. Installazione su Windows
 
 ### Prerequisiti
 
-Sono necessari:
-
-- Python 3.12;
+- Python 3.11 o 3.12;
 - Git;
-- Graphviz installato nel sistema;
+- Graphviz installato;
 - comando `dot` disponibile nel `PATH`.
 
 Verifica di Graphviz:
@@ -964,51 +595,40 @@ dot -V
 
 ### Creazione dell’ambiente virtuale
 
-Dalla root del progetto:
-
 ```powershell
 py -3.12 -m venv .venv
 ```
 
-Aggiornamento di `pip`:
+Attivazione:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+Installazione:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\.venv\Scripts\python.exe -m pip install -e .
 ```
 
-Installazione delle dipendenze:
+Se necessario:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
-Installazione del progetto in modalità editable:
+### Dataset
 
-```powershell
-.\.venv\Scripts\python.exe -m pip install -e .
-```
-
-Installazione delle dipendenze di sviluppo, se necessaria:
-
-```powershell
-.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
-```
-
-### Dataset reale
-
-Copiare il file OCEL 2.0 SQLite in:
+Copiare il database in:
 
 ```text
 data/raw/order_management.sqlite
 ```
 
-Il dataset non deve essere aggiunto al repository Git.
-
 ---
 
-## 13. Esecuzione
-
-Tutti i comandi seguenti devono essere eseguiti dalla root del repository.
+## 11. Esecuzione
 
 ### Controllo dell’ambiente
 
@@ -1022,7 +642,7 @@ Tutti i comandi seguenti devono essere eseguiti dalla root del repository.
 .\.venv\Scripts\python.exe .\scripts\inspect_ocel.py
 ```
 
-### Selezione dei candidati reali
+### Selezione dei candidati
 
 ```powershell
 .\.venv\Scripts\python.exe .\scripts\inspect_order_candidates.py
@@ -1040,43 +660,25 @@ Tutti i comandi seguenti devono essere eseguiti dalla root del repository.
 .\.venv\Scripts\python.exe .\scripts\verify_real_execution.py
 ```
 
-### Caso reale con causal relations manuali
+### Caso reale con relazioni manuali
 
 ```powershell
 .\.venv\Scripts\python.exe .\scripts\run_order_management_real.py
 ```
 
-Questo script usa:
-
-```text
-data/derived/order_management_o_990424_causal_relations.json
-```
-
-### Caso reale con causal relations automatiche
+### Caso reale con relazioni automatiche
 
 ```powershell
 .\.venv\Scripts\python.exe .\scripts\run_order_management_discovered.py
 ```
 
-Questo script esegue:
+Output principale:
 
 ```text
-OCEL
-  -> OC-DFG
-  -> scoring delle relazioni
-  -> filtraggio automatico
-  -> estrazione della execution
-  -> Instance Graph
-  -> validazione
-  -> visualizzazione
-```
-
-Lo script non carica il file di causal relations manuali.
-
-Il risultato atteso è:
-
-```text
-Causal relations totali: 22
+Dependency threshold: 0.9
+Relative support threshold: 0.05
+Self-loop threshold: 0.9
+Causal relations totali: 26
 Causal relations rilevanti: 10
 
 Instance Graph:
@@ -1087,9 +689,26 @@ DAG: True
 VERIFICA CON RELAZIONI DERIVATE SUPERATA
 ```
 
+### Screening delle 22 execution
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\screen_order_executions.py
+```
+
+Riepilogo atteso:
+
+```text
+Execution previste: 22
+Execution superate: 22
+Execution fallite: 0
+Ripetizioni sospette: 0
+
+SCREENING COMPLETO SUPERATO
+```
+
 ---
 
-## 14. Notebook
+## 12. Notebook
 
 Avvio di Jupyter Lab:
 
@@ -1097,72 +716,82 @@ Avvio di Jupyter Lab:
 .\.venv\Scripts\python.exe -m jupyter lab
 ```
 
-L’ordine consigliato dei notebook è:
+Ordine consigliato:
 
 1. `01_environment_check.ipynb`;
 2. `02_ocel_exploration.ipynb`;
 3. `03_ocpn_discovery.ipynb`;
 4. `04_real_instance_graph.ipynb`;
-5. `05_instance_graph.ipynb`.
+5. `05_instance_graph.ipynb`;
+6. `06_real_execution.ipynb`.
 
 ### Notebook 04
 
-Documenta:
-
-- estrazione order-centred;
-- baseline manuale;
-- costruzione del grafo reale;
-- riduzione transitiva;
-- coppie incomparabili;
-- visualizzazione.
+Documenta l’estrazione order-centred e la baseline manuale sul caso reale.
 
 ### Notebook 05
 
 Documenta:
 
-- analisi della struttura della OCPN;
-- limite della raggiungibilità ingenua sulla net `items`;
+- analisi della OCPN;
+- limite della raggiungibilità ingenua;
 - discovery dell’OC-DFG;
-- dependency measure;
-- supporto relativo;
+- dependency e supporto relativo;
 - sensitivity analysis;
-- causal relations derivate;
-- costruzione automatica dell’Instance Graph;
-- confronto con la topologia attesa;
-- limiti metodologici.
+- confronto tra relazioni automatiche e baseline.
 
-Il notebook è stato verificato con:
+Validazione:
 
 ```text
 Celle totali: 24
 Celle di codice: 9
-Celle di codice eseguite: 9
+Celle eseguite: 9
 Celle Markdown: 15
 Errori: 0
+```
+
+### Notebook 06
+
+Documenta:
+
+- le 26 causal relations;
+- le quattro auto-relazioni;
+- il self-loop score;
+- lo screening delle 22 execution;
+- i casi con più item e pacchi;
+- le principali eccezioni;
+- le catene di `failed delivery`;
+- l’incomparabilità su oggetti differenti;
+- i limiti metodologici.
+
+Validazione:
+
+```text
+Celle totali: 22
+Celle di codice: 10
+Celle Markdown: 12
+Celle eseguite: 10
+Errori: 0
+Dimensione: 381650 byte
 Validazione notebook: superata
 ```
 
-### Esecuzione non interattiva del Notebook 05
+Esecuzione non interattiva:
 
 ```powershell
 .\.venv\Scripts\python.exe -m jupyter nbconvert `
     --to notebook `
     --execute `
     --inplace `
-    .\notebooks\05_instance_graph.ipynb `
-    --ExecutePreprocessor.timeout=300
+    .\notebooks\06_real_execution.ipynb `
+    --ExecutePreprocessor.timeout=600
 ```
 
-Su Windows possono comparire avvisi relativi a:
-
-- `Proactor event loop`;
-- comunicazione locale del kernel Jupyter tramite TCP non cifrata.
-
-Nel contesto dell’esecuzione locale questi avvisi non indicano un errore del notebook. La verifica rilevante è l’assenza di output con `output_type = error`.
+Gli avvisi ZMQ relativi al Proactor event loop e al TCP locale non indicano un errore del notebook. La verifica rilevante è l’assenza di output con `output_type = error`.
 
 ---
 
-## 15. Test automatici
+## 13. Test automatici
 
 Esecuzione completa:
 
@@ -1170,134 +799,204 @@ Esecuzione completa:
 .\.venv\Scripts\python.exe -m pytest -v
 ```
 
-Risultato verificato dopo il Blocco 05:
+Risultato verificato dopo l'introduzione dello screening:
 
 ```text
-22 passed
+32 passed
 ```
 
 La suite comprende:
 
 | Area | Verifica |
 | --- | --- |
-| caricamento | parsing della toy execution e delle causal relations |
-| modello dati | rappresentazione degli eventi e degli oggetti |
+| caricamento | parsing degli input sintetici |
+| modello dati | eventi e oggetti |
 | grafo | nodi, archi, DAG e riduzione transitiva |
-| incomparabilità | eventi appartenenti a rami causali distinti |
+| incomparabilità | rami causali distinti |
 | linearizzazioni | stesso grafo per ordini temporali equivalenti |
-| adapter | conversione della execution OCEL nel modello interno |
-| estrazione | delimitazione order-centred e controllo degli oggetti esterni |
-| baseline reale | nodi, archi e proprietà attese per `o-990424` |
-| scoring | frequenze forward e backward, dependency e supporto |
-| validazione | soglie non valide e tipi di oggetto sconosciuti |
-| filtraggio | eliminazione delle relazioni rumorose |
-| discovery reale | presenza delle causal relations attese |
-| integrazione | costruzione del grafo usando relazioni automatiche |
-| ordine parziale | conservazione delle coppie incomparabili |
+| adapter | conversione OCEL nel modello interno |
+| estrazione | delimitazione order-centred |
+| baseline reale | proprietà di `o-990424` |
+| scoring | dependency e supporto relativo |
+| self-loop | calcolo e filtraggio delle auto-relazioni |
+| discovery reale | relazioni automatiche attese |
+| loop reali | catene di `failed delivery` |
+| oggetti differenti | attività uguali lasciate incomparabili |
+| screening | validazione strutturale di 22 execution |
 
-I test specifici del Blocco 05 sono contenuti in:
+Test specifici della derivazione automatica e dello screening:
 
 ```text
 tests/test_causal_relations.py
 tests/test_discovered_causal_relations.py
+tests/test_real_self_loops.py
 ```
 
-Il primo contiene 7 test unitari.
+`test_causal_relations.py` contiene 12 casi, comprendenti scoring ordinario, self-loop e validazione delle soglie.
 
-Il secondo contiene 3 test di integrazione sul dataset reale:
+`test_discovered_causal_relations.py` contiene 3 test di integrazione su `o-990424`.
 
-```text
-test_expected_relations_are_discovered
-test_discovered_relations_build_expected_graph
-test_discovered_graph_preserves_partial_order
-```
+`test_real_self_loops.py` contiene 5 verifiche reali:
+
+- scoperta delle quattro auto-relazioni;
+- catena dei due fallimenti di `o-990254`;
+- catena dei sette fallimenti di `o-990042`;
+- incomparabilità dei pick su item differenti;
+- proprietà DAG e riduzione transitiva.
 
 ---
 
-## 16. Risultati dimostrati
+## 14. Risultati dimostrati
 
-Il progetto dimostra attualmente:
+Il progetto dimostra:
 
-- caricamento del dataset Order Management in formato OCEL 2.0;
-- esplorazione di eventi, oggetti e relazioni;
-- identificazione del rischio introdotto dagli oggetti condivisi;
-- discovery preliminare di una OCPN con PM4Py;
-- implementazione di un modello dati interno indipendente da PM4Py;
-- costruzione dell’Instance Graph sul toy example;
-- equivalenza di due linearizzazioni temporali del toy example;
-- estrazione riproducibile di una execution reale centrata su `o-990424`;
-- conversione della execution nel modello interno;
-- costruzione del grafo reale con causal relations manuali;
-- costruzione del grafo reale con causal relations automatiche;
-- scoring delle relazioni dell’OC-DFG;
-- filtraggio mediante dependency e supporto relativo;
-- sensitivity analysis delle soglie;
-- selezione di 22 causal relations complessive;
-- applicazione di 10 relazioni al caso reale;
-- ottenimento della topologia esatta di 6 archi;
-- assenza di archi attesi mancanti;
-- assenza di archi aggiuntivi;
-- proprietà DAG;
-- riduzione transitiva verificata;
-- conservazione della raggiungibilità;
-- identificazione di 8 coppie incomparabili;
-- annotazione degli archi con tipi e identificatori degli oggetti;
-- generazione automatica della figura;
-- esecuzione completa del notebook 05 senza errori;
-- superamento di 22 test automatici.
+- caricamento ed esplorazione del dataset OCEL 2.0;
+- discovery preliminare della OCPN;
+- modello dati interno indipendente da PM4Py;
+- costruzione dell’Instance Graph sintetico;
+- equivalenza di linearizzazioni temporali indipendenti;
+- estrazione order-centred di execution reali;
+- baseline manuale per `o-990424`;
+- derivazione automatica dall’OC-DFG;
+- scoring mediante dependency e supporto relativo;
+- gestione dei self-loop di lunghezza 1;
+- derivazione di 26 causal relations;
+- corrispondenza esatta con la baseline di `o-990424`;
+- screening di 22 execution reali;
+- 22 grafi DAG, connessi e transitivamente ridotti;
+- assenza di eventi isolati;
+- assenza di ripetizioni sospette;
+- ordinamento delle ripetizioni sullo stesso oggetto;
+- conservazione dell’incomparabilità su oggetti differenti;
+- esecuzione senza errori dei notebook 05 e 06;
+- superamento di 32 test automatici.
 
 ---
 
-## 17. Risultati non ancora dimostrati
+## 15. Risultati non ancora dimostrati
 
 Il progetto non dimostra ancora:
 
-- fitness pari a 1 della process execution reale;
+- fitness pari a 1;
 - conformance checking object-centric formale;
-- object-centric token-based replay completo;
+- token-based replay object-centric completo;
 - object-centric alignment;
 - repairing della process execution;
 - gestione generale di eventi mancanti o aggiuntivi;
-- correttezza delle soglie su tutte le execution del dataset;
+- validità delle soglie su tutte le 2.000 execution;
 - correttezza su dataset differenti;
-- gestione generale di attività ripetute nella stessa execution;
+- gestione generale di loop complessi;
 - disambiguazione generale di transizioni diverse con la stessa etichetta;
-- derivazione delle causal relations direttamente dalla semantica della OCPN;
+- derivazione diretta dalla semantica della OCPN;
 - equivalenza generale tra OC-DFG filtrato e causalità del modello;
-- identificazione certa del parallelismo reale a partire dalla sola incomparabilità;
-- robustezza generale rispetto a loop complessi;
+- identificazione certa del parallelismo reale dalla sola incomparabilità;
 - scalabilità su tutte le process execution del log.
 
-La corrispondenza esatta ottenuta su `o-990424` costituisce una verifica sperimentale sul caso di studio, non una dimostrazione universale.
+I risultati ottenuti costituiscono una verifica sperimentale sui casi selezionati, non una dimostrazione universale.
+
+---
+
+## 16. Prossimi passi
+
+### 16.1 Conformance checking
+
+Studiare la disponibilità di:
+
+- token-based replay object-centric;
+- fitness per tipo di oggetto;
+- diagnostica della OCPN;
+- alignment object-centric;
+- verifica della riproducibilità delle execution.
+
+### 16.2 Estensione oltre le 22 execution
+
+Analizzare:
+
+- execution incomplete;
+- execution strutturalmente contaminate;
+- ordini collegati da oggetti condivisi;
+- casi esclusi dai criteri attuali;
+- dataset object-centric differenti.
+
+### 16.3 Stabilità delle soglie
+
+Le soglie `0.90 / 0.05 / 0.90` sono state mantenute fisse durante lo screening delle 22 execution.
+
+Il risultato riduce il rischio di overfitting sul solo `o-990424`, ma non dimostra validità universale. Sarà utile separare formalmente calibrazione e valutazione.
+
+### 16.4 Loop complessi
+
+Rimangono da analizzare:
+
+- loop che coinvolgono più attività;
+- ritorni a stati precedenti;
+- relazioni reciproche dovute a cicli;
+- transizioni differenti con la stessa etichetta;
+- distinzione tra loop e rumore statistico.
+
+### 16.5 Confronto tra sorgenti causali
+
+Confrontare:
+
+- relazioni manuali;
+- relazioni inferite dall’OC-DFG;
+- relazioni estratte dalla OCPN;
+- relazioni ottenute tramite replay o alignment.
+
+---
+
+## 17. Riproducibilità
+
+Prima di ogni commit importante eseguire:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -v
+```
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\run_order_management_discovered.py
+```
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\screen_order_executions.py
+```
+
+```powershell
+.\.venv\Scripts\python.exe -m jupyter nbconvert `
+    --to notebook `
+    --execute `
+    --inplace `
+    .\notebooks\06_real_execution.ipynb `
+    --ExecutePreprocessor.timeout=600
+```
+
+```powershell
+git status --short
+git diff --check
+```
+
+Su Windows può comparire:
+
+```text
+LF will be replaced by CRLF
+```
+
+È un avviso sulle terminazioni di riga e non indica necessariamente un errore. `git diff --check` non deve segnalare trailing whitespace, conflict marker o altri problemi reali.
 
 ---
 
 ## 18. Riferimenti
 
-- W. M. P. van der Aalst e A. Berti,
-  *Discovering Object-Centric Petri Nets*,
-  Fundamenta Informaticae, 175(1–4), 2020.
-
-- J. T. S. Ribeiro, J. Carmona, M. La Rosa e W. M. P. van der Aalst,
-  riferimenti generali su process mining, modelli di processo e conformance checking.
-
-- A. J. M. M. Weijters, W. M. P. van der Aalst e A. K. Alves de Medeiros,
-  *Process Mining with the HeuristicsMiner Algorithm*,
-  Eindhoven University of Technology, 2006.
-
-- PM4Py — Process Mining for Python:
-  https://processintelligence.solutions/pm4py
-
-- PM4Py source code, DFG filtering e dependency threshold:
-  https://github.com/process-intelligence-solutions/pm4py/blob/release/pm4py/algo/filtering/dfg/dfg_filtering.py
-
-- NetworkX documentation, directed acyclic graphs e transitive reduction:
-  https://networkx.org/documentation/stable/reference/algorithms/generated/networkx.algorithms.dag.transitive_reduction.html
-
+- W. M. P. van der Aalst e A. Berti, *Discovering Object-Centric Petri Nets*, Fundamenta Informaticae, 175(1–4), 2020.
+- A. J. M. M. Weijters, W. M. P. van der Aalst e A. K. Alves de Medeiros, *Process Mining with the HeuristicsMiner Algorithm*, Eindhoven University of Technology, 2006.
+- PM4Py — Process Mining for Python: https://processintelligence.solutions/pm4py
+- PM4Py source code: https://github.com/process-intelligence-solutions/pm4py
+- NetworkX documentation: https://networkx.org/documentation/stable/
 
 ---
 
 ## Autori
 
 **Nicolò Ianni**
+
 **Danilo La Palombara**

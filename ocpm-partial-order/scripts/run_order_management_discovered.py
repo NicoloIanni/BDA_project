@@ -6,6 +6,9 @@ from ocpm_partial_order.config import (
     MAIN_DATASET_DB,
 )
 from ocpm_partial_order.discovery import (
+    DEFAULT_DEPENDENCY_THRESHOLD,
+    DEFAULT_RELATIVE_SUPPORT_THRESHOLD,
+    DEFAULT_SELF_LOOP_THRESHOLD,
     derive_causal_relations,
     score_causal_relations,
 )
@@ -28,8 +31,15 @@ from ocpm_partial_order.visualization.graph_visualizer import (
 
 ORDER_ID = "o-990424"
 
-DEPENDENCY_THRESHOLD = 0.90
-RELATIVE_SUPPORT_THRESHOLD = 0.05
+DEPENDENCY_THRESHOLD = (
+    DEFAULT_DEPENDENCY_THRESHOLD
+)
+RELATIVE_SUPPORT_THRESHOLD = (
+    DEFAULT_RELATIVE_SUPPORT_THRESHOLD
+)
+SELF_LOOP_THRESHOLD = (
+    DEFAULT_SELF_LOOP_THRESHOLD
+)
 
 STRUCTURAL_TYPES = {
     "orders",
@@ -100,8 +110,11 @@ def main() -> None:
         dependency_threshold=(
             DEPENDENCY_THRESHOLD
         ),
-        relative_support_threshold=(
+                relative_support_threshold=(
             RELATIVE_SUPPORT_THRESHOLD
+        ),
+        self_loop_threshold=(
+            SELF_LOOP_THRESHOLD
         ),
         object_types=STRUCTURAL_TYPES,
     )
@@ -144,6 +157,10 @@ def main() -> None:
     print(
         "Relative support threshold:",
         RELATIVE_SUPPORT_THRESHOLD,
+    )
+    print(
+        "Self-loop threshold:",
+        SELF_LOOP_THRESHOLD,
     )
     print(
         "Causal relations totali:",
@@ -306,9 +323,9 @@ def main() -> None:
     print(
         "\nNota metodologica: le causal "
         "relations sono inferite dall'OC-DFG "
-        "mediante dependency e supporto "
-        "relativo. Non sono lette direttamente "
-        "dagli archi della OCPN."
+        "mediante dependency, supporto relativo "
+        "e self-loop score. Non sono lette "
+        "direttamente dagli archi della OCPN."
     )
 
 

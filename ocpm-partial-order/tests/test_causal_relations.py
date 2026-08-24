@@ -148,3 +148,109 @@ def test_unknown_object_type_is_rejected(
             ocdfg=synthetic_ocdfg,
             object_types={"packages"},
         )
+
+@pytest.fixture
+def self_loop_ocdfg() -> dict:
+    return {
+        "edges": {
+            "event_couples": {
+                "packages": {
+                    (
+                        "send package",
+                        "failed delivery",
+                    ): _occurrences(200),
+                    (
+                        "failed delivery",
+                        "failed delivery",
+                    ): _occurrences(96),
+                    (
+                        "failed delivery",
+                        "package delivered",
+                    ): _occurrences(200),
+                }
+            }
+        }
+    }
+
+
+def test_self_loop_score_is_calculated(
+    self_loop_ocdfg: dict,
+) -> None:
+    evidence = score_causal_relations(
+        ocdfg=self_loop_ocdfg,
+        object_types={"packages"},
+    )
+
+    loop_evidence = next(
+        item
+        for item in evidence
+        if item.relation.source_activity
+        == "failed delivery"
+        and item.relation.target_activity
+        == "failed delivery"
+    )
+
+    assert loop_evidence.forward_frequency == 96
+    assert loop_evidence.backward_frequency == 0
+    assert loop_evidence.dependency == 0.0
+    assert (
+        loop_evidence.self_loop_score
+        == pytest.approx(96 / 97)
+    )
+    assert (
+        loop_evidence.relative_support
+        == pytest.approx(96 / 200)
+    )
+
+
+def test_self_loop_is_discovered(
+    self_loop_ocdfg: dict,
+) -> None:
+    relations = derive_causal_relations(
+        ocdfg=self_loop_ocdfg,
+        dependency_threshold=0.90,
+        relative_support_threshold=0.05,
+        self_loop_threshold=0.90,
+        object_types={"packages"},
+    )
+
+    assert CausalRelation(
+        source_activity="failed delivery",
+        target_activity="failed delivery",
+        object_type="packages",
+    ) in relations
+
+
+def test_self_loop_threshold_filters_loop(
+    self_loop_ocdfg: dict,
+) -> None:
+    relations = derive_causal_relations(
+        ocdfg=self_loop_ocdfg,
+        dependency_threshold=0.90,
+        relative_support_threshold=0.05,
+        self_loop_threshold=0.995,
+        object_types={"packages"},
+    )
+
+    assert CausalRelation(
+        source_activity="failed delivery",
+        target_activity="failed delivery",
+        object_type="packages",
+    ) not in relations
+
+
+@pytest.mark.parametrize(
+    "self_loop_threshold",
+    [-0.01, 1.01],
+)
+def test_invalid_self_loop_threshold_is_rejected(
+    self_loop_ocdfg: dict,
+    self_loop_threshold: float,
+) -> None:
+    with pytest.raises(ValueError):
+        derive_causal_relations(
+            ocdfg=self_loop_ocdfg,
+            self_loop_threshold=(
+                self_loop_threshold
+            ),
+        )

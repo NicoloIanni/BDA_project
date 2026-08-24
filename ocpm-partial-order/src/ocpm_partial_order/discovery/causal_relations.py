@@ -10,6 +10,7 @@ from ocpm_partial_order.domain.causal_relation import (
 
 DEFAULT_DEPENDENCY_THRESHOLD = 0.90
 DEFAULT_RELATIVE_SUPPORT_THRESHOLD = 0.05
+DEFAULT_SELF_LOOP_THRESHOLD = 0.90
 
 
 @dataclass(frozen=True)
@@ -17,6 +18,12 @@ class CausalRelationEvidence:
     """
     Contiene una causal relation candidata e le misure
     utilizzate per valutarla.
+
+    Per una relazione tra attività differenti viene
+    calcolata la dependency measure.
+
+    Per una relazione nella quale sorgente e destinazione
+    coincidono viene invece calcolato il self-loop score.
     """
 
     relation: CausalRelation
@@ -24,13 +31,14 @@ class CausalRelationEvidence:
     backward_frequency: int
     dependency: float
     relative_support: float
+    self_loop_score: float | None = None
 
 
 def _measure_frequency(value: Any) -> int:
     """
     Converte una misura dell'OC-DFG in una frequenza.
 
-    PM4Py puo rappresentare gli event couples mediante
+    PM4Py può rappresentare gli event couples mediante
     collezioni oppure mediante valori numerici.
     """
     if isinstance(value, Number):
@@ -60,12 +68,21 @@ def score_causal_relations(
     object_types: Iterable[str] | None = None,
 ) -> tuple[CausalRelationEvidence, ...]:
     """
-    Calcola dependency e supporto relativo degli archi
-    direttamente osservati nell'OC-DFG.
+    Calcola le misure degli archi osservati nell'OC-DFG.
 
-    Le relazioni tra un'attivita e se stessa vengono
-    escluse in questa prima versione, coerentemente con
-    le assunzioni dell'attuale Instance Graph.
+    Per attività differenti viene usata la dependency:
+
+        (forward - backward)
+        / (forward + backward + 1)
+
+    Per un'attività seguita dalla stessa attività viene
+    usato il punteggio dei loop di lunghezza 1:
+
+        frequency / (frequency + 1)
+
+    Il supporto relativo confronta sempre la frequenza
+    dell'arco con la massima frequenza uscente dalla
+    stessa attività sorgente.
     """
     try:
         edges_by_type = ocdfg[
@@ -136,21 +153,28 @@ def score_causal_relations(
             )
 
         for source, target in sorted(frequencies):
-            if source == target:
-                continue
-
             forward = frequencies[
                 (source, target)
             ]
-            backward = frequencies.get(
-                (target, source),
-                0,
-            )
 
-            dependency = (
-                (forward - backward)
-                / (forward + backward + 1)
-            )
+            if source == target:
+                backward = 0
+                dependency = 0.0
+                self_loop_score = (
+                    forward / (forward + 1)
+                )
+            else:
+                backward = frequencies.get(
+                    (target, source),
+                    0,
+                )
+
+                dependency = (
+                    (forward - backward)
+                    / (forward + backward + 1)
+                )
+
+                self_loop_score = None
 
             source_maximum = maximum_by_source[
                 source
@@ -173,6 +197,7 @@ def score_causal_relations(
                     backward_frequency=backward,
                     dependency=dependency,
                     relative_support=relative_support,
+                    self_loop_score=self_loop_score,
                 )
             )
 
@@ -187,14 +212,22 @@ def derive_causal_relations(
     relative_support_threshold: float = (
         DEFAULT_RELATIVE_SUPPORT_THRESHOLD
     ),
+    self_loop_threshold: float = (
+        DEFAULT_SELF_LOOP_THRESHOLD
+    ),
     object_types: Iterable[str] | None = None,
 ) -> set[CausalRelation]:
     """
     Deriva le causal relations candidate dall'OC-DFG.
 
-    Una relazione viene mantenuta se supera sia la
-    dependency threshold sia la soglia di supporto
-    relativo rispetto alla massima uscita della sorgente.
+    Le relazioni tra attività differenti devono superare
+    la dependency threshold.
+
+    Le auto-relazioni devono superare la self-loop
+    threshold.
+
+    Entrambe devono inoltre superare la soglia di
+    supporto relativo.
     """
     _validate_threshold(
         "dependency_threshold",
@@ -204,17 +237,47 @@ def derive_causal_relations(
         "relative_support_threshold",
         relative_support_threshold,
     )
+    _validate_threshold(
+        "self_loop_threshold",
+        self_loop_threshold,
+    )
 
     evidence = score_causal_relations(
         ocdfg=ocdfg,
         object_types=object_types,
     )
 
-    return {
-        item.relation
-        for item in evidence
-        if item.dependency
-        >= dependency_threshold
-        and item.relative_support
-        >= relative_support_threshold
-    }
+    accepted_relations = set()
+
+    for item in evidence:
+        relation = item.relation
+
+        is_self_loop = (
+            relation.source_activity
+            == relation.target_activity
+        )
+
+        if is_self_loop:
+            score_is_sufficient = (
+                item.self_loop_score is not None
+                and item.self_loop_score
+                >= self_loop_threshold
+            )
+        else:
+            score_is_sufficient = (
+                item.dependency
+                >= dependency_threshold
+            )
+
+        support_is_sufficient = (
+            item.relative_support
+            >= relative_support_threshold
+        )
+
+        if (
+            score_is_sufficient
+            and support_is_sufficient
+        ):
+            accepted_relations.add(relation)
+
+    return accepted_relations
