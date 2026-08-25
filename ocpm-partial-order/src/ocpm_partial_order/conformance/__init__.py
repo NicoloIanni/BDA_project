@@ -8,6 +8,18 @@ from ocpm_partial_order.conformance.holdout_validation import (
     evaluate_structural_holdout,
     split_flattened_object_type_log,
 )
+from ocpm_partial_order.conformance.object_centric_graph_validation import (
+    DEFAULT_GRAPH_OBJECT_TYPES,
+    DEFAULT_GRAPH_TRAIN_RATIO,
+    ObjectCentricComponentSplit,
+    ObjectCentricGraphEvaluation,
+    StructuralSetComparison,
+    compare_structural_sets,
+    evaluate_object_centric_graph_holdout,
+    filter_structural_ocel,
+    split_object_centric_components,
+    typed_ocdfg_flows,
+)
 from ocpm_partial_order.conformance.object_type_replay import (
     ExecutionProjectionConformance,
     ObjectTraceConformance,
@@ -21,20 +33,30 @@ from ocpm_partial_order.conformance.object_type_replay import (
 
 
 __all__ = [
+    "DEFAULT_GRAPH_OBJECT_TYPES",
+    "DEFAULT_GRAPH_TRAIN_RATIO",
     "DEFAULT_NOISE_THRESHOLD",
     "DEFAULT_STRUCTURAL_OBJECT_TYPES",
     "DEFAULT_TRAIN_RATIO",
     "ExecutionProjectionConformance",
+    "ObjectCentricComponentSplit",
+    "ObjectCentricGraphEvaluation",
     "ObjectTraceConformance",
     "ObjectTypeConformanceSummary",
     "ObjectTypeHoldoutEvaluation",
     "ObjectTypeHoldoutSplit",
+    "StructuralSetComparison",
     "check_execution_projections",
     "check_object_projection",
     "check_object_type_conformance",
+    "compare_structural_sets",
+    "evaluate_object_centric_graph_holdout",
     "evaluate_object_type_holdout",
     "evaluate_structural_holdout",
+    "filter_structural_ocel",
     "replay_flattened_object_trace",
     "replay_flattened_object_type",
     "split_flattened_object_type_log",
+    "split_object_centric_components",
+    "typed_ocdfg_flows",
 ]

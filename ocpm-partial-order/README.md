@@ -412,6 +412,43 @@ Le 2.202 tracce di test risultano tutte conformi, senza token mancanti o residui
 
 Lo split di `items` è component-aware e privo di leakage, ma non è un holdout futuro in senso stretto: alcune componenti connesse attraversano periodi temporali sovrapposti.
 
+### Validazione holdout object-centric basata su grafi
+
+È stata aggiunta una validazione object-centric nativa basata sui confronti OC-DFG, OTG ed ET-OT forniti da PM4Py. Non si tratta di un replay sincronizzato sulla OCPN: il controllo confronta strutture object-centric scoperte esclusivamente sul training con quelle osservate nel test.
+
+Lo split utilizza le componenti connesse degli oggetti strutturali `orders`, `items` e `packages`. I tipi `employees` e `products` vengono esclusi dallo split perché collegano l’intero log in una sola componente.
+
+| Misura | Training | Test |
+| --- | ---: | ---: |
+| componenti | 44 | 24 |
+| eventi | 16.547 | 4.461 |
+| oggetti | 8.531 | 2.256 |
+| eventi condivisi | 0 | 0 |
+| oggetti condivisi | 0 | 0 |
+
+| Rappresentazione | Fitness predefinita | Fitness strutturale |
+| --- | ---: | ---: |
+| OC-DFG | 0,4925 | 0,9851 |
+| OTG | 0,5714 | 1,0000 |
+| ET-OT | 0,6346 | 1,0000 |
+
+Le fitness predefinite sono influenzate dalle diverse dimensioni di training e test. Il confronto strutturale mostra invece che tutto il comportamento osservato nel test era già presente nel training: la copertura del test è pari a 1 per attività e flussi OC-DFG tipizzati, archi OTG e relazioni ET-OT. Il test non introduce elementi strutturali nuovi.
+
+Due soli flussi del training non ricompaiono nel test:
+
+- `items: create package -> payment reminder`;
+- `items: payment reminder -> send package`.
+
+Entrambi appartengono alla stessa variante rara e sono osservati su sei item del training.
+
+L’esperimento è implementato in `object_centric_graph_validation.py`, verificato da `test_object_centric_graph_validation.py`, riproducibile con `check_object_centric_graph_conformance.py` e documentato nel notebook `09_object_centric_graph_conformance.ipynb`.
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\check_object_centric_graph_conformance.py
+```
+
+Questi risultati forniscono evidenza di generalizzazione object-centric out-of-sample a livello di grafi, ma non dimostrano una fitness globalmente sincronizzata della OCPN.
+
 ### Controlli negativi
 
 Il controllo non si limita ad accettare le tracce originali. La proiezione del pacco `p-660247` è stata modificata artificialmente per verificare che PM4Py riconosca le deviazioni.
@@ -540,7 +577,8 @@ ocpm-partial-order/
 |   |-- 05_instance_graph.ipynb
 |   |-- 06_real_execution.ipynb
 |   |-- 07_conformance_checking.ipynb
-|   `-- 08_out_of_sample_validation.ipynb
+|   |-- 08_out_of_sample_validation.ipynb
+|   `-- 09_object_centric_graph_conformance.ipynb
 |
 |-- outputs/
 |   |-- figures/
@@ -552,6 +590,7 @@ ocpm-partial-order/
 |   |-- check_environment.py
 |   |-- check_object_type_conformance.py
 |   |-- check_out_of_sample_conformance.py
+|   |-- check_object_centric_graph_conformance.py
 |   |-- inspect_ocel.py
 |   |-- inspect_order_candidates.py
 |   |-- run_order_management_discovered.py
@@ -566,6 +605,7 @@ ocpm-partial-order/
 |   |-- conformance/
 |   |   |-- __init__.py
 |   |   |-- holdout_validation.py
+|   |   |-- object_centric_graph_validation.py
 |   |   `-- object_type_replay.py
 |   |-- discovery/
 |   |   |-- causal_relations.py
@@ -595,6 +635,7 @@ ocpm-partial-order/
 |   |-- test_execution_adapter.py
 |   |-- test_instance_graph.py
 |   |-- test_holdout_validation.py
+|   |-- test_object_centric_graph_validation.py
 |   |-- test_object_type_conformance.py
 |   |-- test_real_instance_graph.py
 |   |-- test_real_self_loops.py
@@ -757,7 +798,8 @@ Ordine consigliato:
 5. `05_instance_graph.ipynb`;
 6. `06_real_execution.ipynb`;
 7. `07_conformance_checking.ipynb`;
-8. `08_out_of_sample_validation.ipynb`.
+8. `08_out_of_sample_validation.ipynb`;
+9. `09_object_centric_graph_conformance.ipynb`.
 
 ### Notebook 04
 
@@ -890,7 +932,7 @@ Esecuzione completa:
 Risultato verificato:
 
 ```text
-46 passed
+56 passed
 ```
 
 La suite comprende:
@@ -968,8 +1010,8 @@ Il progetto dimostra:
 - precisione out-of-sample superiore a 0,99 per `orders` e `packages`;
 - individuazione della bassa precisione della componente `items`;
 - calcolo di precisione, generalizzazione e semplicità;
-- esecuzione senza errori dei notebook 05, 06, 07 e 08;
-- superamento di 46 test automatici.
+- esecuzione senza errori dei notebook 05, 06, 07, 08 e 09;
+- superamento di 56 test automatici.
 
 ---
 
