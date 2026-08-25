@@ -8,6 +8,15 @@ from ocpm_partial_order.conformance.holdout_validation import (
     evaluate_structural_holdout,
     split_flattened_object_type_log,
 )
+from ocpm_partial_order.conformance.instance_graph_holdout_validation import (
+    DEFAULT_DEPENDENCY_THRESHOLD,
+    DEFAULT_ORDER_OBJECT_TYPE,
+    DEFAULT_RELATIVE_SUPPORT_THRESHOLD,
+    DEFAULT_SELF_LOOP_THRESHOLD,
+    InstanceGraphHoldoutEvaluation,
+    InstanceGraphHoldoutResult,
+    evaluate_instance_graph_holdout,
+)
 from ocpm_partial_order.conformance.object_centric_graph_validation import (
     DEFAULT_GRAPH_OBJECT_TYPES,
     DEFAULT_GRAPH_TRAIN_RATIO,
@@ -33,12 +42,18 @@ from ocpm_partial_order.conformance.object_type_replay import (
 
 
 __all__ = [
+    "DEFAULT_DEPENDENCY_THRESHOLD",
     "DEFAULT_GRAPH_OBJECT_TYPES",
+    "DEFAULT_ORDER_OBJECT_TYPE",
+    "DEFAULT_RELATIVE_SUPPORT_THRESHOLD",
+    "DEFAULT_SELF_LOOP_THRESHOLD",
     "DEFAULT_GRAPH_TRAIN_RATIO",
     "DEFAULT_NOISE_THRESHOLD",
     "DEFAULT_STRUCTURAL_OBJECT_TYPES",
     "DEFAULT_TRAIN_RATIO",
     "ExecutionProjectionConformance",
+    "InstanceGraphHoldoutEvaluation",
+    "InstanceGraphHoldoutResult",
     "ObjectCentricComponentSplit",
     "ObjectCentricGraphEvaluation",
     "ObjectTraceConformance",
@@ -50,6 +65,7 @@ __all__ = [
     "check_object_projection",
     "check_object_type_conformance",
     "compare_structural_sets",
+    "evaluate_instance_graph_holdout",
     "evaluate_object_centric_graph_holdout",
     "evaluate_object_type_holdout",
     "evaluate_structural_holdout",

@@ -4,7 +4,7 @@ Prototipo universitario per la costruzione di **Instance Graph object-centric a 
 
 Il progetto è sviluppato da **Nicolò Ianni** e **Danilo La Palombara** nell’ambito di Big Data Analytics e Object-Centric Process Mining.
 
-> **Stato attuale:** sono state completate la configurazione dell’ambiente, l’esplorazione del dataset, la discovery preliminare della Object-Centric Petri Net, la costruzione dell’Instance Graph su un esempio sintetico e su process execution reali, la derivazione automatica delle causal relations dall’Object-Centric Directly-Follows Graph, lo screening di 22 process execution, il conformance checking per tipo di oggetto e la validazione out-of-sample senza condivisione di casi o eventi.
+> **Stato attuale:** sono state completate la configurazione dell’ambiente, l’esplorazione del dataset, la discovery preliminare della Object-Centric Petri Net, la costruzione dell’Instance Graph su esempi sintetici e process execution reali, la derivazione automatica delle causal relations dall’Object-Centric Directly-Follows Graph, lo screening di 22 process execution, il conformance checking per tipo di oggetto e due validazioni holdout prive di sovrapposizioni tra training e test.
 >
 > Per l’ordine `o-990424` è stato costruito automaticamente un Instance Graph con 7 nodi e 6 archi. Il grafo è un DAG, è transitivamente ridotto e conserva due rami causali incomparabili.
 >
@@ -12,7 +12,7 @@ Il progetto è sviluppato da **Nicolò Ianni** e **Danilo La Palombara** nell’
 >
 > Il conformance checking è stato eseguito separatamente sulle proiezioni `orders`, `items` e `packages`. Tutte le 10.787 proiezioni risultano conformi alle rispettive Petri net componenti, con fitness media pari a 1 e senza token mancanti o residui. Questo risultato non costituisce una fitness object-centric globalmente sincronizzata.
 >
-> Nella validazione out-of-sample, le reti sono state scoperte soltanto sui training set e valutate su 2.202 tracce di test senza identificatori di caso o evento condivisi. Tutte le tracce risultano fitting; la precisione della componente `items`, pari a circa 0,47, evidenzia tuttavia un modello fortemente generalizzante.
+> Nella validazione end-to-end degli Instance Graph, le causal relations vengono apprese esclusivamente dalle 44 componenti di training. Le 24 componenti di test non condividono eventi né oggetti con il training. Sui 9 ordini ammissibili secondo la definizione order-centred adottata, tutti i grafi sono DAG connessi, coprono tutti gli eventi, sono transitivamente ridotti e coincidono topologicamente con la baseline full-log. Gli altri 427 ordini sono esclusi per contaminazione strutturale e non sono conteggiati come errori del grafo.
 
 ---
 
@@ -85,12 +85,25 @@ OCEL 2.0 Order Management
         |       +--> ricerca delle coppie incomparabili
         |       `--> controllo delle attività ripetute
         |
-        `--> conformance checking per tipo di oggetto
+        +--> conformance checking per tipo di oggetto
+        |       |
+        |       +--> flattening delle proiezioni
+        |       +--> token-based replay
+        |       +--> diagnostica per singolo oggetto
+        |       `--> riepilogo per tipo di oggetto
+        |
+        +--> validazione holdout object-centric basata su grafi
+        |       |
+        |       +--> split per componenti connesse
+        |       +--> OC-DFG, OTG ed ET-OT
+        |       `--> confronto strutturale training/test
+        |
+        `--> validazione holdout end-to-end degli Instance Graph
                 |
-                +--> flattening delle proiezioni
-                +--> token-based replay
-                +--> diagnostica per singolo oggetto
-                `--> riepilogo per tipo di oggetto
+                +--> relazioni apprese soltanto dal training
+                +--> estrazione degli ordini del test
+                +--> costruzione e validazione dei grafi
+                `--> confronto post-hoc con la baseline full-log
 ```
 
 Le attività metodologiche devono rimanere distinte:
@@ -99,7 +112,8 @@ Le attività metodologiche devono rimanere distinte:
 2. **estrazione:** delimitare una process execution nel log object-centric;
 3. **inferenza delle causal relations:** selezionare dipendenze candidate;
 4. **costruzione dell’Instance Graph:** applicare le relazioni agli eventi e agli oggetti;
-5. **conformance checking:** verificare se le proiezioni sono riproducibili dalle Petri net componenti.
+5. **conformance checking:** verificare se le proiezioni sono riproducibili dalle Petri net componenti;
+6. **validazione holdout:** misurare la generalizzazione su componenti che non condividono eventi o oggetti con il training.
 
 Il completamento di un’attività non dimostra automaticamente le altre.
 
@@ -116,7 +130,9 @@ La versione attuale assume che:
 - il conformance checking venga eseguito separatamente sulle proiezioni dei tipi strutturali;
 - non vengano ancora calcolati object-centric alignment globalmente sincronizzati;
 - non sia stato ancora eseguito un token-based replay object-centric globalmente sincronizzato;
-- il controllo sulle proiezioni sia in-sample, perché la OCPN viene scoperta dallo stesso OCEL sottoposto a replay;
+- il controllo sulle 10.787 proiezioni sia in-sample, perché la OCPN viene scoperta dallo stesso OCEL sottoposto a replay;
+- le validazioni holdout separino training e test per componenti connesse del grafo di interazione object-centric;
+- la valutazione end-to-end riguardi soltanto gli ordini non contaminati secondo la definizione order-centred adottata;
 - non vengano applicati repairing, inserimenti o cancellazioni alla process execution;
 - i self-loop di lunghezza 1 siano gestiti mediante una soglia dedicata;
 - i loop complessi non siano ancora gestiti in modo generale;
@@ -381,74 +397,6 @@ Controllo sull’intero log:
 
 Questa è una verifica in-sample: la OCPN è stata scoperta dallo stesso OCEL sottoposto al replay. Il risultato misura la capacità delle componenti scoperte di riprodurre le proprie proiezioni, non la generalizzazione su dati esterni.
 
-### Validazione out-of-sample senza leakage
-
-Per valutare comportamento non utilizzato durante la discovery, ogni log appiattito viene suddiviso in training e test con rapporto obiettivo pari a `0.80`. Uno split diretto dei casi non è sufficiente per `items`: 131 eventi risulterebbero condivisi tra training e test, perché lo stesso evento può riferirsi a più articoli.
-
-La procedura applicata è quindi:
-
-1. collegare i casi che condividono almeno un identificatore di evento;
-2. calcolare le componenti connesse;
-3. assegnare ogni componente interamente al training o al test;
-4. scoprire la Petri net esclusivamente dal training set;
-5. valutare il test set mediante token-based replay e metriche di qualità.
-
-| Tipo | Componenti | Training | Test | Rapporto effettivo | Varianti test non osservate |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| `orders` | 2.000 | 1.600 | 400 | 0,8000 | 0 |
-| `items` | 68 | 6.083 | 1.576 | 0,7942 | 28 |
-| `packages` | 1.128 | 902 | 226 | 0,7996 | 0 |
-
-Training e test non condividono identificatori di caso o di evento.
-
-| Tipo | Tracce test | Fitting | Fitness | Precisione | Generalizzazione | Semplicità |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| `orders` | 400 | 400 | 1,0 | 0,9978 | 0,9113 | 0,8824 |
-| `items` | 1.576 | 1.576 | 1,0 | 0,4720 | 0,9567 | 0,6842 |
-| `packages` | 226 | 226 | 1,0 | 0,9981 | 0,8863 | 0,8824 |
-| **Totale** | **2.202** | **2.202** | **1,0** | n.d. | n.d. | n.d. |
-
-Le 2.202 tracce di test risultano tutte conformi, senza token mancanti o residui. Per `orders` e `packages`, la fitness perfetta è accompagnata da una precisione superiore a 0,99. La precisione di `items`, pari a circa 0,47, mostra invece che la rete ammette molto comportamento aggiuntivo e conferma quantitativamente la struttura ciclica e generalizzante osservata durante l’analisi della OCPN.
-
-Lo split di `items` è component-aware e privo di leakage, ma non è un holdout futuro in senso stretto: alcune componenti connesse attraversano periodi temporali sovrapposti.
-
-### Validazione holdout object-centric basata su grafi
-
-È stata aggiunta una validazione object-centric nativa basata sui confronti OC-DFG, OTG ed ET-OT forniti da PM4Py. Non si tratta di un replay sincronizzato sulla OCPN: il controllo confronta strutture object-centric scoperte esclusivamente sul training con quelle osservate nel test.
-
-Lo split utilizza le componenti connesse degli oggetti strutturali `orders`, `items` e `packages`. I tipi `employees` e `products` vengono esclusi dallo split perché collegano l’intero log in una sola componente.
-
-| Misura | Training | Test |
-| --- | ---: | ---: |
-| componenti | 44 | 24 |
-| eventi | 16.547 | 4.461 |
-| oggetti | 8.531 | 2.256 |
-| eventi condivisi | 0 | 0 |
-| oggetti condivisi | 0 | 0 |
-
-| Rappresentazione | Fitness predefinita | Fitness strutturale |
-| --- | ---: | ---: |
-| OC-DFG | 0,4925 | 0,9851 |
-| OTG | 0,5714 | 1,0000 |
-| ET-OT | 0,6346 | 1,0000 |
-
-Le fitness predefinite sono influenzate dalle diverse dimensioni di training e test. Il confronto strutturale mostra invece che tutto il comportamento osservato nel test era già presente nel training: la copertura del test è pari a 1 per attività e flussi OC-DFG tipizzati, archi OTG e relazioni ET-OT. Il test non introduce elementi strutturali nuovi.
-
-Due soli flussi del training non ricompaiono nel test:
-
-- `items: create package -> payment reminder`;
-- `items: payment reminder -> send package`.
-
-Entrambi appartengono alla stessa variante rara e sono osservati su sei item del training.
-
-L’esperimento è implementato in `object_centric_graph_validation.py`, verificato da `test_object_centric_graph_validation.py`, riproducibile con `check_object_centric_graph_conformance.py` e documentato nel notebook `09_object_centric_graph_conformance.ipynb`.
-
-```powershell
-.\.venv\Scripts\python.exe .\scripts\check_object_centric_graph_conformance.py
-```
-
-Questi risultati forniscono evidenza di generalizzazione object-centric out-of-sample a livello di grafi, ma non dimostrano una fitness globalmente sincronizzata della OCPN.
-
 ### Controlli negativi
 
 Il controllo non si limita ad accettare le tracce originali. La proiezione del pacco `p-660247` è stata modificata artificialmente per verificare che PM4Py riconosca le deviazioni.
@@ -461,6 +409,91 @@ Il controllo non si limita ad accettare le tracce originali. La proiezione del p
 | ordine invertito | 0.5 | 0.3333 | non conforme |
 
 La transizione invisibile presente nell’allineamento della traccia originale appartiene al modello e non rappresenta una deviazione.
+
+### Validazione holdout object-centric basata su grafi
+
+Per ridurre il leakage, l’OCEL viene suddiviso per componenti connesse del grafo di interazione considerando i tipi strutturali `orders`, `items` e `packages`. Training e test non condividono eventi né oggetti.
+
+La validazione confronta strutturalmente training e test mediante tre rappresentazioni native di PM4Py:
+
+- Object-Centric Directly-Follows Graph (OC-DFG);
+- Object Type Graph (OTG);
+- Event Type–Object Type graph (ET-OT).
+
+Per ogni rappresentazione vengono conservate sia le diagnostiche predefinite sia confronti strutturali simmetrici. Le differenze di frequenza dovute alla diversa dimensione dei due sotto-log non vengono confuse con differenze di struttura.
+
+L’esperimento è implementato in `object_centric_graph_validation.py`, verificato da `test_object_centric_graph_validation.py`, riproducibile con `check_object_centric_graph_conformance.py` e documentato nel notebook `09_object_centric_graph_conformance.ipynb`.
+
+Questi risultati forniscono evidenza di generalizzazione object-centric out-of-sample a livello di grafi, ma non dimostrano una fitness globalmente sincronizzata della OCPN.
+
+### Validazione holdout end-to-end degli Instance Graph
+
+La validazione conclusiva esegue l’intera pipeline senza utilizzare il test durante l’apprendimento:
+
+```text
+OCEL completo
+    -> split per componenti connesse
+    -> OC-DFG sul solo training
+    -> causal relations dal solo training
+    -> estrazione degli ordini del test
+    -> costruzione degli Instance Graph
+    -> validazione strutturale
+    -> confronto post-hoc con baseline full-log
+```
+
+Separazione dei dati:
+
+```text
+componenti totali: 68
+componenti training: 44
+componenti test: 24
+eventi training: 16547
+eventi test: 4461
+oggetti training: 8531
+oggetti test: 2256
+rapporto effettivo training: 0.7877
+eventi condivisi: 0
+oggetti condivisi: 0
+```
+
+Apprendimento delle relazioni:
+
+```text
+dependency threshold: 0.90
+relative support threshold: 0.05
+self-loop threshold: 0.90
+relazioni training: 26
+relazioni baseline full-log: 26
+relazioni mancanti: 0
+relazioni aggiuntive: 0
+set esattamente coincidente: sì
+```
+
+Selezione e risultati:
+
+```text
+ordini presenti nel test: 436
+ordini esclusi per contaminazione strutturale: 427
+ordini valutabili: 9
+grafi strutturalmente validi: 9
+grafi con topologia esatta: 9
+```
+
+Tutti i nove grafi valutati sono DAG, connessi, coprono tutti gli eventi e sono transitivamente ridotti. Le topologie coincidono con quelle costruite usando le relazioni della baseline full-log.
+
+| Ordine | Eventi | Nodi | Archi | Valido | Topologia esatta |
+| --- | ---: | ---: | ---: | --- | --- |
+| `o-991144` | 11 | 11 | 14 | sì | sì |
+| `o-991284` | 8 | 8 | 8 | sì | sì |
+| `o-991324` | 11 | 11 | 14 | sì | sì |
+| `o-991520` | 11 | 11 | 12 | sì | sì |
+| `o-991630` | 9 | 9 | 10 | sì | sì |
+| `o-991686` | 10 | 10 | 12 | sì | sì |
+| `o-991749` | 7 | 7 | 6 | sì | sì |
+| `o-991925` | 11 | 11 | 14 | sì | sì |
+| `o-991982` | 9 | 9 | 10 | sì | sì |
+
+La baseline full-log viene usata soltanto dopo la costruzione dei grafi holdout per confrontarne la topologia. I 427 ordini esclusi attraversano collegamenti con item o ordini estranei rispetto al caso centrato sull’ordine: sono fuori dal dominio di applicabilità del prototipo corrente e non rappresentano fallimenti dei nove grafi valutati.
 
 ---
 
@@ -578,7 +611,8 @@ ocpm-partial-order/
 |   |-- 06_real_execution.ipynb
 |   |-- 07_conformance_checking.ipynb
 |   |-- 08_out_of_sample_validation.ipynb
-|   `-- 09_object_centric_graph_conformance.ipynb
+|   |-- 09_object_centric_graph_conformance.ipynb
+|   `-- 10_instance_graph_holdout_validation.ipynb
 |
 |-- outputs/
 |   |-- figures/
@@ -588,9 +622,10 @@ ocpm-partial-order/
 |
 |-- scripts/
 |   |-- check_environment.py
+|   |-- check_instance_graph_holdout.py
+|   |-- check_object_centric_graph_conformance.py
 |   |-- check_object_type_conformance.py
 |   |-- check_out_of_sample_conformance.py
-|   |-- check_object_centric_graph_conformance.py
 |   |-- inspect_ocel.py
 |   |-- inspect_order_candidates.py
 |   |-- run_order_management_discovered.py
@@ -605,6 +640,7 @@ ocpm-partial-order/
 |   |-- conformance/
 |   |   |-- __init__.py
 |   |   |-- holdout_validation.py
+|   |   |-- instance_graph_holdout_validation.py
 |   |   |-- object_centric_graph_validation.py
 |   |   `-- object_type_replay.py
 |   |-- discovery/
@@ -634,9 +670,10 @@ ocpm-partial-order/
 |   |-- test_equivalent_linearizations.py
 |   |-- test_execution_adapter.py
 |   |-- test_instance_graph.py
-|   |-- test_holdout_validation.py
+|   |-- test_instance_graph_holdout_validation.py
 |   |-- test_object_centric_graph_validation.py
 |   |-- test_object_type_conformance.py
+|   |-- test_holdout_validation.py
 |   |-- test_real_instance_graph.py
 |   |-- test_real_self_loops.py
 |   `-- test_sample_loader.py
@@ -771,13 +808,23 @@ token mancanti: 0
 token residui: 0
 ```
 
-### Validazione out-of-sample senza leakage
+### Validazione out-of-sample delle proiezioni
 
 ```powershell
 .\.venv\Scripts\python.exe .\scripts\check_out_of_sample_conformance.py
 ```
 
-Lo script costruisce uno split component-aware, scopre le Petri net soltanto sui training set e valuta 2.202 tracce di test. Stampa inoltre precisione, generalizzazione e semplicità per ciascun tipo di oggetto.
+### Validazione holdout object-centric basata su grafi
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\check_object_centric_graph_conformance.py
+```
+
+### Validazione holdout end-to-end degli Instance Graph
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\check_instance_graph_holdout.py
+```
 
 ---
 
@@ -799,7 +846,8 @@ Ordine consigliato:
 6. `06_real_execution.ipynb`;
 7. `07_conformance_checking.ipynb`;
 8. `08_out_of_sample_validation.ipynb`;
-9. `09_object_centric_graph_conformance.ipynb`.
+9. `09_object_centric_graph_conformance.ipynb`;
+10. `10_instance_graph_holdout_validation.ipynb`.
 
 ### Notebook 04
 
@@ -917,6 +965,64 @@ Esecuzione non interattiva del notebook 08:
     .\notebooks\08_out_of_sample_validation.ipynb
 ```
 
+### Notebook 09
+
+Documenta:
+
+- lo split nativo dell’OCEL per componenti connesse;
+- l’assenza di eventi e oggetti condivisi tra training e test;
+- la discovery separata delle rappresentazioni object-centric;
+- la validazione holdout mediante OC-DFG, OTG ed ET-OT;
+- le diagnostiche PM4Py predefinite;
+- i confronti strutturali simmetrici tra training e test;
+- la distinzione tra copertura strutturale, generalizzazione object-centric e fitness OCPN globalmente sincronizzata;
+- i limiti dell’esperimento basato sui grafi.
+
+Esecuzione non interattiva del notebook 09:
+
+```powershell
+.\.venv\Scripts\python.exe -m jupyter nbconvert `
+    --to notebook `
+    --execute `
+    --inplace `
+    --ExecutePreprocessor.timeout=600 `
+    .\notebooks\09_object_centric_graph_conformance.ipynb
+```
+
+### Notebook 10
+
+Documenta:
+
+- lo split delle 68 componenti in 44 componenti di training e 24 di test;
+- l’assenza di eventi e oggetti condivisi tra i due sotto-log;
+- la derivazione delle 26 causal relations dal solo training;
+- il confronto post-hoc con le 26 relazioni della baseline full-log;
+- la selezione dei 9 ordini ammissibili e l’esclusione motivata di 427 ordini contaminati;
+- la costruzione e validazione end-to-end dei nove Instance Graph;
+- la corrispondenza topologica esatta con la baseline;
+- la distinzione tra generalizzazione sui casi ammissibili e fitness OCPN globalmente sincronizzata.
+
+Validazione:
+
+```text
+celle totali: 14
+celle di codice: 6
+celle non eseguite: 0
+errori: 0
+validazione notebook: superata
+```
+
+Esecuzione non interattiva del notebook 10:
+
+```powershell
+.\.venv\Scripts\python.exe -m jupyter nbconvert `
+    --to notebook `
+    --execute `
+    --inplace `
+    --ExecutePreprocessor.timeout=600 `
+    .\notebooks\10_instance_graph_holdout_validation.ipynb
+```
+
 Gli avvisi ZMQ relativi al Proactor event loop e al TCP locale non indicano un errore del notebook. La verifica rilevante è l’assenza di output con `output_type = error`.
 
 ---
@@ -932,7 +1038,7 @@ Esecuzione completa:
 Risultato verificato:
 
 ```text
-56 passed
+71 passed
 ```
 
 La suite comprende:
@@ -954,9 +1060,10 @@ La suite comprende:
 | oggetti differenti | attività uguali lasciate incomparabili |
 | screening | validazione strutturale di 22 execution |
 | conformance | replay delle proiezioni e diagnostica di fitness |
-| holdout | split senza leakage e validazione out-of-sample |
-| qualità | precisione, generalizzazione e semplicità |
 | controllo negativo | riconoscimento di una traccia incompleta |
+| holdout per tipo | discovery e replay senza leakage tra componenti |
+| grafi object-centric | OC-DFG, OTG ed ET-OT su training e test separati |
+| end-to-end | apprendimento training-only e topologia degli Instance Graph di test |
 
 I sei test di conformance verificano:
 
@@ -967,13 +1074,16 @@ I sei test di conformance verificano:
 - rifiuto di un tipo di oggetto sconosciuto;
 - rifiuto di un identificatore di oggetto sconosciuto.
 
-Gli otto test di holdout verificano:
+I 15 test end-to-end verificano inoltre:
 
-- assegnazione congiunta dei casi che condividono eventi;
-- rifiuto di rapporti di training non validi;
-- rifiuto di log privi delle colonne richieste;
-- rifiuto di log costituiti da una sola componente connessa;
-- valutazione reale out-of-sample delle proiezioni `packages`.
+- valori predefiniti e validazione delle soglie;
+- esportazioni pubbliche del modulo;
+- assenza di sovrapposizioni tra training e test;
+- apprendimento delle relazioni dal solo training;
+- rilevazione della contaminazione strutturale;
+- proprietà DAG, connessione, copertura e riduzione transitiva;
+- confronto topologico con la baseline full-log;
+- riepilogo aggregato della valutazione.
 
 ---
 
@@ -1003,15 +1113,15 @@ Il progetto dimostra:
 - fitness media delle proiezioni pari a 1;
 - assenza di token mancanti e residui nelle proiezioni complete;
 - riconoscimento di tracce alterate mediante controlli negativi;
-- split component-aware senza identificatori di caso o evento condivisi;
-- discovery delle Petri net eseguita esclusivamente sui training set;
-- conformità di 2.202 tracce out-of-sample;
-- fitness out-of-sample media pari a 1 e assenza di token devianti;
-- precisione out-of-sample superiore a 0,99 per `orders` e `packages`;
-- individuazione della bassa precisione della componente `items`;
-- calcolo di precisione, generalizzazione e semplicità;
-- esecuzione senza errori dei notebook 05, 06, 07, 08 e 09;
-- superamento di 56 test automatici.
+- split holdout per componenti connesse senza eventi o oggetti condivisi;
+- validazione object-centric out-of-sample mediante OC-DFG, OTG ed ET-OT;
+- apprendimento training-only delle 26 causal relations;
+- corrispondenza esatta tra relazioni training e baseline full-log;
+- costruzione di 9 Instance Graph ammissibili sul test;
+- validità strutturale di tutti i 9 grafi holdout;
+- corrispondenza topologica esatta di tutti i 9 grafi con la baseline;
+- esecuzione senza errori dei notebook 05, 06, 07, 08, 09 e 10;
+- superamento di 71 test automatici.
 
 ---
 
@@ -1025,8 +1135,7 @@ Il progetto non dimostra ancora:
 - object-centric alignment;
 - repairing della process execution;
 - gestione generale di eventi mancanti o aggiuntivi;
-- generalizzazione su un dataset esterno indipendente;
-- holdout strettamente future-only per la componente `items`;
+- fitness globalmente sincronizzata della OCPN su un log di test separato;
 - validità delle soglie su tutte le 2.000 process execution;
 - correttezza su dataset differenti;
 - gestione generale di loop complessi;
@@ -1034,7 +1143,9 @@ Il progetto non dimostra ancora:
 - derivazione diretta dalla semantica della OCPN;
 - equivalenza generale tra OC-DFG filtrato e causalità del modello;
 - identificazione certa del parallelismo reale dalla sola incomparabilità;
-- scalabilità della costruzione dei grafi su tutte le process execution del log.
+- scalabilità della costruzione dei grafi su tutte le process execution del log;
+- validità del metodo sui 427 ordini esclusi per contaminazione strutturale;
+- generalizzazione oltre i 9 ordini ammissibili presenti nel test corrente.
 
 I risultati ottenuti costituiscono una verifica sperimentale sul dataset e sui casi selezionati, non una dimostrazione universale.
 
@@ -1066,28 +1177,33 @@ Esecuzione del conformance checking:
 .\.venv\Scripts\python.exe .\scripts\check_object_type_conformance.py
 ```
 
-Esecuzione della validazione out-of-sample:
+Esecuzione della validazione out-of-sample delle proiezioni:
 
 ```powershell
 .\.venv\Scripts\python.exe .\scripts\check_out_of_sample_conformance.py
 ```
 
-Esecuzione dei notebook conclusivi:
+Esecuzione della validazione object-centric basata su grafi:
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\check_object_centric_graph_conformance.py
+```
+
+Esecuzione della validazione end-to-end degli Instance Graph:
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\check_instance_graph_holdout.py
+```
+
+Esecuzione del notebook conclusivo:
 
 ```powershell
 .\.venv\Scripts\python.exe -m jupyter nbconvert `
     --to notebook `
     --execute `
     --inplace `
-    --ExecutePreprocessor.timeout=600 `
-    .\notebooks\07_conformance_checking.ipynb
-
-.\.venv\Scripts\python.exe -m jupyter nbconvert `
-    --to notebook `
-    --execute `
-    --inplace `
-    --ExecutePreprocessor.timeout=600 `
-    .\notebooks\08_out_of_sample_validation.ipynb
+    .\notebooks\10_instance_graph_holdout_validation.ipynb `
+    --ExecutePreprocessor.timeout=600
 ```
 
 Controllo finale del repository:
