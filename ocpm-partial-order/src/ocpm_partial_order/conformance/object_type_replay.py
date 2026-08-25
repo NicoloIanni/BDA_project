@@ -480,24 +480,43 @@ def check_execution_projections(
     )
 
 
-def check_object_type_conformance(
-    ocel,
-    ocpn: Mapping[str, Any],
+def replay_flattened_object_type(
+    flattened_log: pd.DataFrame,
+    component_petri_net: tuple[
+        Any,
+        Any,
+        Any,
+    ],
     object_type: str,
 ) -> ObjectTypeConformanceSummary:
     """
     Esegue il token-based replay di tutte le
-    proiezioni appartenenti a un object type.
+    proiezioni contenute in un log appiattito.
+
+    La funzione pu? essere usata sia sul log
+    completo sia su partizioni di training,
+    validation oppure test.
     """
-    component = _get_component_petri_net(
-        ocpn,
+    _require_non_empty_string(
+        "object_type",
         object_type,
+    )
+    _require_flattened_columns(
+        flattened_log
     )
 
-    flattened_log = pm4py.ocel_flattening(
-        ocel,
-        object_type,
-    )
+    if (
+        not isinstance(
+            component_petri_net,
+            tuple,
+        )
+        or len(component_petri_net) != 3
+    ):
+        raise ValueError(
+            "component_petri_net deve contenere "
+            "Petri net, initial marking e "
+            "final marking"
+        )
 
     traditional_log = (
         pm4py.convert_to_event_log(
@@ -506,7 +525,7 @@ def check_object_type_conformance(
     )
 
     net, initial_marking, final_marking = (
-        component
+        component_petri_net
     )
 
     diagnostics = (
@@ -628,4 +647,30 @@ def check_object_type_conformance(
             for result in ordered_results
         ),
         trace_results=ordered_results,
+    )
+
+
+def check_object_type_conformance(
+    ocel,
+    ocpn: Mapping[str, Any],
+    object_type: str,
+) -> ObjectTypeConformanceSummary:
+    """
+    Esegue il token-based replay di tutte le
+    proiezioni appartenenti a un object type.
+    """
+    component = _get_component_petri_net(
+        ocpn,
+        object_type,
+    )
+
+    flattened_log = pm4py.ocel_flattening(
+        ocel,
+        object_type,
+    )
+
+    return replay_flattened_object_type(
+        flattened_log=flattened_log,
+        component_petri_net=component,
+        object_type=object_type,
     )

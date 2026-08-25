@@ -4,13 +4,15 @@ Prototipo universitario per la costruzione di **Instance Graph object-centric a 
 
 Il progetto è sviluppato da **Nicolò Ianni** e **Danilo La Palombara** nell’ambito di Big Data Analytics e Object-Centric Process Mining.
 
-> **Stato attuale:** sono state completate la configurazione dell’ambiente, l’esplorazione del dataset, la discovery preliminare della Object-Centric Petri Net, la costruzione dell’Instance Graph su un esempio sintetico e su process execution reali, la derivazione automatica delle causal relations dall’Object-Centric Directly-Follows Graph, lo screening di 22 process execution e il conformance checking per tipo di oggetto mediante token-based replay.
+> **Stato attuale:** sono state completate la configurazione dell’ambiente, l’esplorazione del dataset, la discovery preliminare della Object-Centric Petri Net, la costruzione dell’Instance Graph su un esempio sintetico e su process execution reali, la derivazione automatica delle causal relations dall’Object-Centric Directly-Follows Graph, lo screening di 22 process execution, il conformance checking per tipo di oggetto e la validazione out-of-sample senza condivisione di casi o eventi.
 >
 > Per l’ordine `o-990424` è stato costruito automaticamente un Instance Graph con 7 nodi e 6 archi. Il grafo è un DAG, è transitivamente ridotto e conserva due rami causali incomparabili.
 >
 > La procedura deriva 26 causal relations: 22 tra attività differenti e 4 auto-relazioni. I self-loop permettono di ordinare correttamente le attività ripetute sullo stesso oggetto senza imporre un ordine tra attività uguali riferite a oggetti differenti.
 >
 > Il conformance checking è stato eseguito separatamente sulle proiezioni `orders`, `items` e `packages`. Tutte le 10.787 proiezioni risultano conformi alle rispettive Petri net componenti, con fitness media pari a 1 e senza token mancanti o residui. Questo risultato non costituisce una fitness object-centric globalmente sincronizzata.
+>
+> Nella validazione out-of-sample, le reti sono state scoperte soltanto sui training set e valutate su 2.202 tracce di test senza identificatori di caso o evento condivisi. Tutte le tracce risultano fitting; la precisione della componente `items`, pari a circa 0,47, evidenzia tuttavia un modello fortemente generalizzante.
 
 ---
 
@@ -379,6 +381,37 @@ Controllo sull’intero log:
 
 Questa è una verifica in-sample: la OCPN è stata scoperta dallo stesso OCEL sottoposto al replay. Il risultato misura la capacità delle componenti scoperte di riprodurre le proprie proiezioni, non la generalizzazione su dati esterni.
 
+### Validazione out-of-sample senza leakage
+
+Per valutare comportamento non utilizzato durante la discovery, ogni log appiattito viene suddiviso in training e test con rapporto obiettivo pari a `0.80`. Uno split diretto dei casi non è sufficiente per `items`: 131 eventi risulterebbero condivisi tra training e test, perché lo stesso evento può riferirsi a più articoli.
+
+La procedura applicata è quindi:
+
+1. collegare i casi che condividono almeno un identificatore di evento;
+2. calcolare le componenti connesse;
+3. assegnare ogni componente interamente al training o al test;
+4. scoprire la Petri net esclusivamente dal training set;
+5. valutare il test set mediante token-based replay e metriche di qualità.
+
+| Tipo | Componenti | Training | Test | Rapporto effettivo | Varianti test non osservate |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `orders` | 2.000 | 1.600 | 400 | 0,8000 | 0 |
+| `items` | 68 | 6.083 | 1.576 | 0,7942 | 28 |
+| `packages` | 1.128 | 902 | 226 | 0,7996 | 0 |
+
+Training e test non condividono identificatori di caso o di evento.
+
+| Tipo | Tracce test | Fitting | Fitness | Precisione | Generalizzazione | Semplicità |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `orders` | 400 | 400 | 1,0 | 0,9978 | 0,9113 | 0,8824 |
+| `items` | 1.576 | 1.576 | 1,0 | 0,4720 | 0,9567 | 0,6842 |
+| `packages` | 226 | 226 | 1,0 | 0,9981 | 0,8863 | 0,8824 |
+| **Totale** | **2.202** | **2.202** | **1,0** | n.d. | n.d. | n.d. |
+
+Le 2.202 tracce di test risultano tutte conformi, senza token mancanti o residui. Per `orders` e `packages`, la fitness perfetta è accompagnata da una precisione superiore a 0,99. La precisione di `items`, pari a circa 0,47, mostra invece che la rete ammette molto comportamento aggiuntivo e conferma quantitativamente la struttura ciclica e generalizzante osservata durante l’analisi della OCPN.
+
+Lo split di `items` è component-aware e privo di leakage, ma non è un holdout futuro in senso stretto: alcune componenti connesse attraversano periodi temporali sovrapposti.
+
 ### Controlli negativi
 
 Il controllo non si limita ad accettare le tracce originali. La proiezione del pacco `p-660247` è stata modificata artificialmente per verificare che PM4Py riconosca le deviazioni.
@@ -506,7 +539,8 @@ ocpm-partial-order/
 |   |-- 04_real_instance_graph.ipynb
 |   |-- 05_instance_graph.ipynb
 |   |-- 06_real_execution.ipynb
-|   `-- 07_conformance_checking.ipynb
+|   |-- 07_conformance_checking.ipynb
+|   `-- 08_out_of_sample_validation.ipynb
 |
 |-- outputs/
 |   |-- figures/
@@ -517,6 +551,7 @@ ocpm-partial-order/
 |-- scripts/
 |   |-- check_environment.py
 |   |-- check_object_type_conformance.py
+|   |-- check_out_of_sample_conformance.py
 |   |-- inspect_ocel.py
 |   |-- inspect_order_candidates.py
 |   |-- run_order_management_discovered.py
@@ -530,6 +565,7 @@ ocpm-partial-order/
 |   |-- config.py
 |   |-- conformance/
 |   |   |-- __init__.py
+|   |   |-- holdout_validation.py
 |   |   `-- object_type_replay.py
 |   |-- discovery/
 |   |   |-- causal_relations.py
@@ -558,6 +594,7 @@ ocpm-partial-order/
 |   |-- test_equivalent_linearizations.py
 |   |-- test_execution_adapter.py
 |   |-- test_instance_graph.py
+|   |-- test_holdout_validation.py
 |   |-- test_object_type_conformance.py
 |   |-- test_real_instance_graph.py
 |   |-- test_real_self_loops.py
@@ -693,6 +730,14 @@ token mancanti: 0
 token residui: 0
 ```
 
+### Validazione out-of-sample senza leakage
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\check_out_of_sample_conformance.py
+```
+
+Lo script costruisce uno split component-aware, scopre le Petri net soltanto sui training set e valuta 2.202 tracce di test. Stampa inoltre precisione, generalizzazione e semplicità per ciascun tipo di oggetto.
+
 ---
 
 ## 12. Notebook
@@ -711,7 +756,8 @@ Ordine consigliato:
 4. `04_real_instance_graph.ipynb`;
 5. `05_instance_graph.ipynb`;
 6. `06_real_execution.ipynb`;
-7. `07_conformance_checking.ipynb`.
+7. `07_conformance_checking.ipynb`;
+8. `08_out_of_sample_validation.ipynb`.
 
 ### Notebook 04
 
@@ -795,6 +841,40 @@ Esecuzione non interattiva del notebook 07:
     --ExecutePreprocessor.timeout=600
 ```
 
+### Notebook 08
+
+Documenta:
+
+- il leakage prodotto da uno split ingenuo dei casi;
+- le 131 condivisioni di evento rilevate per `items`;
+- la costruzione dello split per componenti connesse;
+- la discovery eseguita esclusivamente sui training set;
+- il token-based replay su 2.202 tracce out-of-sample;
+- precisione, generalizzazione e semplicità dei modelli;
+- la bassa precisione della componente `items`;
+- i limiti della validazione component-aware.
+
+Validazione:
+
+```text
+celle totali: 16
+celle di codice: 7
+celle eseguite: 7
+errori salvati: 0
+validazione notebook: superata
+```
+
+Esecuzione non interattiva del notebook 08:
+
+```powershell
+.\.venv\Scripts\python.exe -m jupyter nbconvert `
+    --to notebook `
+    --execute `
+    --inplace `
+    --ExecutePreprocessor.timeout=600 `
+    .\notebooks\08_out_of_sample_validation.ipynb
+```
+
 Gli avvisi ZMQ relativi al Proactor event loop e al TCP locale non indicano un errore del notebook. La verifica rilevante è l’assenza di output con `output_type = error`.
 
 ---
@@ -810,7 +890,7 @@ Esecuzione completa:
 Risultato verificato:
 
 ```text
-38 passed
+46 passed
 ```
 
 La suite comprende:
@@ -832,6 +912,8 @@ La suite comprende:
 | oggetti differenti | attività uguali lasciate incomparabili |
 | screening | validazione strutturale di 22 execution |
 | conformance | replay delle proiezioni e diagnostica di fitness |
+| holdout | split senza leakage e validazione out-of-sample |
+| qualità | precisione, generalizzazione e semplicità |
 | controllo negativo | riconoscimento di una traccia incompleta |
 
 I sei test di conformance verificano:
@@ -842,6 +924,14 @@ I sei test di conformance verificano:
 - riconoscimento di una traccia incompleta;
 - rifiuto di un tipo di oggetto sconosciuto;
 - rifiuto di un identificatore di oggetto sconosciuto.
+
+Gli otto test di holdout verificano:
+
+- assegnazione congiunta dei casi che condividono eventi;
+- rifiuto di rapporti di training non validi;
+- rifiuto di log privi delle colonne richieste;
+- rifiuto di log costituiti da una sola componente connessa;
+- valutazione reale out-of-sample delle proiezioni `packages`.
 
 ---
 
@@ -871,8 +961,15 @@ Il progetto dimostra:
 - fitness media delle proiezioni pari a 1;
 - assenza di token mancanti e residui nelle proiezioni complete;
 - riconoscimento di tracce alterate mediante controlli negativi;
-- esecuzione senza errori dei notebook 05, 06 e 07;
-- superamento di 38 test automatici.
+- split component-aware senza identificatori di caso o evento condivisi;
+- discovery delle Petri net eseguita esclusivamente sui training set;
+- conformità di 2.202 tracce out-of-sample;
+- fitness out-of-sample media pari a 1 e assenza di token devianti;
+- precisione out-of-sample superiore a 0,99 per `orders` e `packages`;
+- individuazione della bassa precisione della componente `items`;
+- calcolo di precisione, generalizzazione e semplicità;
+- esecuzione senza errori dei notebook 05, 06, 07 e 08;
+- superamento di 46 test automatici.
 
 ---
 
@@ -886,7 +983,8 @@ Il progetto non dimostra ancora:
 - object-centric alignment;
 - repairing della process execution;
 - gestione generale di eventi mancanti o aggiuntivi;
-- generalizzazione della OCPN su un log di test separato;
+- generalizzazione su un dataset esterno indipendente;
+- holdout strettamente future-only per la componente `items`;
 - validità delle soglie su tutte le 2.000 process execution;
 - correttezza su dataset differenti;
 - gestione generale di loop complessi;
@@ -926,15 +1024,28 @@ Esecuzione del conformance checking:
 .\.venv\Scripts\python.exe .\scripts\check_object_type_conformance.py
 ```
 
-Esecuzione del notebook conclusivo:
+Esecuzione della validazione out-of-sample:
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\check_out_of_sample_conformance.py
+```
+
+Esecuzione dei notebook conclusivi:
 
 ```powershell
 .\.venv\Scripts\python.exe -m jupyter nbconvert `
     --to notebook `
     --execute `
     --inplace `
-    .\notebooks\07_conformance_checking.ipynb `
-    --ExecutePreprocessor.timeout=600
+    --ExecutePreprocessor.timeout=600 `
+    .\notebooks\07_conformance_checking.ipynb
+
+.\.venv\Scripts\python.exe -m jupyter nbconvert `
+    --to notebook `
+    --execute `
+    --inplace `
+    --ExecutePreprocessor.timeout=600 `
+    .\notebooks\08_out_of_sample_validation.ipynb
 ```
 
 Controllo finale del repository:
