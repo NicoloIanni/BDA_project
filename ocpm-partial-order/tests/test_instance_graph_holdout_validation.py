@@ -1,11 +1,20 @@
+from types import SimpleNamespace
+
 import pytest
+
+from ocpm_partial_order.conformance import (
+    instance_graph_holdout_validation as holdout_module,
+)
 
 from ocpm_partial_order.config import (
     MAIN_DATASET_DB,
 )
 from ocpm_partial_order.conformance.instance_graph_holdout_validation import (
+    ExcludedOrderDiagnostic,
     InstanceGraphHoldoutResult,
     evaluate_instance_graph_holdout,
+    evaluate_training_threshold_sensitivity,
+    export_holdout_instance_graphs,
 )
 from ocpm_partial_order.io.ocel_loader import (
     load_ocel2_sqlite,
@@ -70,6 +79,81 @@ def test_result_reports_edge_differences():
     assert not result.additional_training_edges
     assert not result.exact_topology
     assert not result.is_structurally_valid
+
+
+def test_training_only_sensitivity_reports_stability(
+    monkeypatch,
+):
+    training_ocdfg = {
+        "edges": {
+            "event_couples": {
+                "orders": {
+                    ("place order", "pay order"): 20,
+                }
+            }
+        }
+    }
+    monkeypatch.setattr(
+        holdout_module.pm4py,
+        "discover_ocdfg",
+        lambda _: training_ocdfg,
+    )
+
+    sensitivity = evaluate_training_threshold_sensitivity(
+        object(),
+        object_types=("orders",),
+        dependency_thresholds=(0.80, 0.90),
+        relative_support_thresholds=(0.05,),
+        self_loop_thresholds=(0.90,),
+    )
+
+    assert sensitivity.configuration_count == 2
+    assert sensitivity.stable_configuration_count == 2
+    assert len(sensitivity.default_relations) == 1
+
+
+def test_exports_only_evaluated_training_graphs(
+    monkeypatch,
+    tmp_path,
+):
+    evaluation = SimpleNamespace(
+        results=(SimpleNamespace(order_id="o-test"),),
+        split=SimpleNamespace(test_ocel=object()),
+        training_relations=frozenset(),
+    )
+    calls = []
+
+    monkeypatch.setattr(
+        holdout_module,
+        "extract_order_centred_execution",
+        lambda ocel, order_id: (ocel, order_id),
+    )
+    monkeypatch.setattr(
+        holdout_module,
+        "build_instance_graph",
+        lambda execution, relations: (
+            execution,
+            relations,
+        ),
+    )
+
+    def fake_save(graph, output_path):
+        calls.append((graph, output_path))
+        return output_path
+
+    monkeypatch.setattr(
+        holdout_module,
+        "save_instance_graph",
+        fake_save,
+    )
+
+    paths = export_holdout_instance_graphs(
+        evaluation,
+        tmp_path,
+    )
+
+    assert paths == (tmp_path / "o-test.png",)
+    assert len(calls) == 1
 
 
 def test_real_split_has_no_leakage(
@@ -137,6 +221,16 @@ def test_test_orders_are_classified(
 
     assert classified == set(
         real_evaluation.test_order_ids
+    )
+    assert real_evaluation.evaluation_coverage == pytest.approx(
+        9 / 436
+    )
+    assert sum(
+        real_evaluation.exclusion_reason_counts.values()
+    ) == 427
+    assert all(
+        isinstance(item, ExcludedOrderDiagnostic)
+        for item in real_evaluation.excluded_orders
     )
 
 

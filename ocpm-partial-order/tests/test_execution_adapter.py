@@ -143,11 +143,17 @@ def test_rejects_foreign_structural_objects() -> None:
     with pytest.raises(
         StructuralContaminationError,
         match="i-foreign",
-    ):
+    ) as error_info:
         extract_order_centred_execution(
             ocel,
             "o-1",
         )
+
+    error = error_info.value
+
+    assert error.order_id == "o-1"
+    assert error.foreign_items == ("i-foreign",)
+    assert error.reason_code == "foreign_items"
 
 
 def test_rejects_unknown_order() -> None:

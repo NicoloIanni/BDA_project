@@ -14,7 +14,60 @@ class StructuralContaminationError(ValueError):
     """
     Indica che l'espansione di un ordine ha raggiunto
     item oppure ordini estranei.
+
+    Oltre al messaggio leggibile conserva dati strutturati.
+    In questo modo gli esperimenti possono contare e spiegare
+    le esclusioni senza analizzare una stringa di errore.
     """
+
+    def __init__(
+        self,
+        message: str | None = None,
+        *,
+        order_id: str | None = None,
+        foreign_items: set[str] | tuple[str, ...] = (),
+        foreign_orders: set[str] | tuple[str, ...] = (),
+    ) -> None:
+        self.order_id = order_id
+        self.foreign_items = tuple(
+            sorted(str(value) for value in foreign_items)
+        )
+        self.foreign_orders = tuple(
+            sorted(str(value) for value in foreign_orders)
+        )
+
+        if message is None:
+            details = []
+
+            if self.foreign_items:
+                details.append(
+                    "item estranei="
+                    + ", ".join(self.foreign_items)
+                )
+
+            if self.foreign_orders:
+                details.append(
+                    "ordini estranei="
+                    + ", ".join(self.foreign_orders)
+                )
+
+            message = (
+                f"L'estrazione dell'ordine {order_id} "
+                "è strutturalmente contaminata: "
+                + "; ".join(details)
+            )
+
+        super().__init__(message)
+
+    @property
+    def reason_code(self) -> str:
+        if self.foreign_items and self.foreign_orders:
+            return "foreign_items_and_orders"
+        if self.foreign_items:
+            return "foreign_items"
+        if self.foreign_orders:
+            return "foreign_orders"
+        return "structural_contamination"
 
 
 def _require_columns(
@@ -224,24 +277,10 @@ def extract_order_centred_execution(
     )
 
     if foreign_items or foreign_orders:
-        details = []
-
-        if foreign_items:
-            details.append(
-                "item estranei="
-                + ", ".join(sorted(foreign_items))
-            )
-
-        if foreign_orders:
-            details.append(
-                "ordini estranei="
-                + ", ".join(sorted(foreign_orders))
-            )
-
         raise StructuralContaminationError(
-            f"L'estrazione dell'ordine {order_id} "
-            "è strutturalmente contaminata: "
-            + "; ".join(details)
+            order_id=str(order_id),
+            foreign_items=foreign_items,
+            foreign_orders=foreign_orders,
         )
 
     event_metadata: dict[

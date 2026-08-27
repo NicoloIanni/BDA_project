@@ -4,15 +4,15 @@ Prototipo universitario per la costruzione di **Instance Graph object-centric a 
 
 Il progetto è sviluppato da **Nicolò Ianni** e **Danilo La Palombara** nell’ambito di Big Data Analytics e Object-Centric Process Mining.
 
-> **Stato attuale:** sono state completate la configurazione dell’ambiente, l’esplorazione del dataset, la discovery preliminare della Object-Centric Petri Net, la costruzione dell’Instance Graph su esempi sintetici e process execution reali, la derivazione automatica delle causal relations dall’Object-Centric Directly-Follows Graph, lo screening di 22 process execution, il conformance checking per tipo di oggetto e due validazioni holdout prive di sovrapposizioni tra training e test.
+> **Stato attuale:** sono state completate la configurazione dell’ambiente, l’esplorazione del dataset, la discovery preliminare della Object-Centric Petri Net, la costruzione dell’Instance Graph su esempi sintetici e process execution reali, l’inferenza di relazioni candidate di precedenza causale dall’Object-Centric Directly-Follows Graph, lo screening di 22 process execution, il conformance checking per tipo di oggetto e due validazioni holdout prive di sovrapposizioni tra training e test.
 >
 > Per l’ordine `o-990424` è stato costruito automaticamente un Instance Graph con 7 nodi e 6 archi. Il grafo è un DAG, è transitivamente ridotto e conserva due rami causali incomparabili.
 >
-> La procedura deriva 26 causal relations: 22 tra attività differenti e 4 auto-relazioni. I self-loop permettono di ordinare correttamente le attività ripetute sullo stesso oggetto senza imporre un ordine tra attività uguali riferite a oggetti differenti.
+> La procedura inferisce 26 relazioni candidate di precedenza causale: 22 tra attività differenti e 4 auto-relazioni. I self-loop permettono di ordinare correttamente le attività ripetute sullo stesso oggetto senza imporre un ordine tra attività uguali riferite a oggetti differenti.
 >
 > Il conformance checking è stato eseguito separatamente sulle proiezioni `orders`, `items` e `packages`. Tutte le 10.787 proiezioni risultano conformi alle rispettive Petri net componenti, con fitness media pari a 1 e senza token mancanti o residui. Questo risultato non costituisce una fitness object-centric globalmente sincronizzata.
 >
-> Nella validazione end-to-end degli Instance Graph, le causal relations vengono apprese esclusivamente dalle 44 componenti di training. Le 24 componenti di test non condividono eventi né oggetti con il training. Sui 9 ordini ammissibili secondo la definizione order-centred adottata, tutti i grafi sono DAG connessi, coprono tutti gli eventi, sono transitivamente ridotti e coincidono topologicamente con la baseline full-log. Gli altri 427 ordini sono esclusi per contaminazione strutturale e non sono conteggiati come errori del grafo.
+> Nella validazione end-to-end degli Instance Graph, le relazioni candidate vengono apprese esclusivamente dalle 44 componenti di training. Le 24 componenti di test non condividono eventi né oggetti con il training. Sui 9 ordini ammissibili secondo la definizione order-centred adottata, tutti i grafi sono DAG connessi, coprono tutti gli eventi, sono transitivamente ridotti e coincidono topologicamente con la baseline full-log. Gli altri 427 ordini sono esclusi per contaminazione strutturale: la copertura esplicita del prototipo è quindi 9/436, pari a circa il 2,06% degli ordini del test.
 
 ---
 
@@ -278,9 +278,9 @@ L’Instance Graph risultante contiene:
 
 Il fatto che `pay order` abbia un timestamp successivo a `package delivered` non introduce una dipendenza causale tra consegna e pagamento.
 
-### Derivazione automatica delle causal relations
+### Inferenza automatica delle relazioni candidate
 
-Le causal relations vengono derivate dall’Object-Centric Directly-Follows Graph. Per ogni coppia di attività e tipo di oggetto vengono calcolate frequenza, direzione predominante e rilevanza relativa.
+Le relazioni candidate di precedenza causale vengono inferite dall’Object-Centric Directly-Follows Graph. Per ogni coppia di attività e tipo di oggetto vengono calcolate frequenza, direzione predominante e rilevanza relativa. Nel codice il tipo continua a chiamarsi `CausalRelation`, ma il nome non implica che il grafo direttamente-segue dimostri una causalità semantica: indica la relazione operativa usata per decidere quali archi sono ammessi nell’Instance Graph.
 
 Per attività differenti viene usata la dependency measure:
 
@@ -307,7 +307,9 @@ relative support threshold = 0.05
 
 Con queste soglie vengono selezionate automaticamente 22 causal relations tra attività differenti. Dieci sono applicabili alla process execution `o-990424` e producono esattamente i sei archi della baseline, senza archi mancanti o aggiuntivi.
 
-L’analisi di sensibilità considera 24 combinazioni di soglie. La topologia attesa viene mantenuta in 15 configurazioni, quindi il risultato non dipende da un solo valore scelto appositamente per il caso.
+La prima analisi esplorativa di sensibilità considerava 24 combinazioni di soglie sul caso di riferimento: la topologia attesa veniva mantenuta in 15 configurazioni. Questo risultato era utile durante lo sviluppo, ma era ancora una verifica in-sample sul caso noto.
+
+Nella validazione holdout finale le soglie predefinite restano fissate prima di osservare i risultati del test. Una seconda griglia di 24 configurazioni viene ora calcolata esclusivamente sul sotto-log di training e confronta ciascun set di relazioni con quello prodotto dalla configurazione predefinita. Questa diagnostica misura la stabilità del modello appreso senza usare il test per scegliere retroattivamente i parametri. Nell'esecuzione verificata, 8 configurazioni su 24 mantengono esattamente il set di relazioni prodotto dalla configurazione predefinita.
 
 ### Self-loop
 
@@ -475,6 +477,7 @@ Selezione e risultati:
 ordini presenti nel test: 436
 ordini esclusi per contaminazione strutturale: 427
 ordini valutabili: 9
+copertura del prototipo: 2,06%
 grafi strutturalmente validi: 9
 grafi con topologia esatta: 9
 ```
@@ -493,7 +496,20 @@ Tutti i nove grafi valutati sono DAG, connessi, coprono tutti gli eventi e sono 
 | `o-991925` | 11 | 11 | 14 | sì | sì |
 | `o-991982` | 9 | 9 | 10 | sì | sì |
 
-La baseline full-log viene usata soltanto dopo la costruzione dei grafi holdout per confrontarne la topologia. I 427 ordini esclusi attraversano collegamenti con item o ordini estranei rispetto al caso centrato sull’ordine: sono fuori dal dominio di applicabilità del prototipo corrente e non rappresentano fallimenti dei nove grafi valutati.
+La baseline full-log viene usata soltanto dopo la costruzione dei grafi holdout per confrontarne la topologia. I 427 ordini esclusi attraversano collegamenti con item o ordini estranei rispetto al caso centrato sull’ordine: sono fuori dal dominio di applicabilità del prototipo corrente e non rappresentano fallimenti dei nove grafi valutati. Il programma conserva ora, per ogni esclusione, l’ordine coinvolto, gli item estranei, gli ordini estranei e un codice del motivo; lo script stampa i conteggi aggregati e alcuni esempi. La copertura del 2,06% deve essere riportata insieme ai risultati 9/9, perché delimita con precisione l’ambito in cui il prototipo è stato valutato.
+
+I risultati mostrano quindi una generalizzazione end-to-end sui casi **ammissibili** secondo l’estrazione order-centred adottata. Non dimostrano validità sui 427 casi esclusi, causalità semantica delle relazioni inferite o fitness globalmente sincronizzata della Object-Centric Petri Net.
+
+
+### Grafi holdout esportati
+
+I nove Instance Graph costruiti con le relazioni candidate inferite esclusivamente dal training sono disponibili nella cartella `outputs/holdout_instance_graphs`.
+
+Il caso `o-991749`, composto da sette eventi e sei archi, costituisce l'esempio più compatto da utilizzare durante una dimostrazione:
+
+![Instance Graph holdout dell'ordine o-991749](outputs/holdout_instance_graphs/o-991749.png)
+
+Gli altri otto file permettono di mostrare process execution con un numero maggiore di eventi e ramificazioni. Tutte le immagini sono rigenerabili mediante l'opzione `--export-graphs`.
 
 ---
 
@@ -826,6 +842,21 @@ token residui: 0
 .\.venv\Scripts\python.exe .\scripts\check_instance_graph_holdout.py
 ```
 
+Per eseguire la stessa validazione ed esportare in PNG tutti i grafi holdout valutati:
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\check_instance_graph_holdout.py `
+    --export-graphs
+```
+
+I file vengono salvati in `outputs\holdout_instance_graphs`. Per aprire la cartella da PowerShell:
+
+```powershell
+Invoke-Item .\outputs\holdout_instance_graphs
+```
+
+È possibile scegliere una cartella diversa indicando il percorso dopo `--export-graphs`.
+
 ---
 
 ## 12. Notebook
@@ -1035,11 +1066,13 @@ Esecuzione completa:
 .\.venv\Scripts\python.exe -m pytest -v
 ```
 
-Risultato verificato:
+Risultato verificato dopo l’estensione diagnostica ed esportazione grafica:
 
 ```text
-71 passed
+73 passed
 ```
+
+La suite completa aggiornata è stata eseguita sul dataset reale e termina con `73 passed`.
 
 La suite comprende:
 
@@ -1081,6 +1114,10 @@ I 15 test end-to-end verificano inoltre:
 - assenza di sovrapposizioni tra training e test;
 - apprendimento delle relazioni dal solo training;
 - rilevazione della contaminazione strutturale;
+- conservazione del motivo strutturato delle esclusioni;
+- calcolo della copertura effettiva del prototipo;
+- analisi di sensibilità delle soglie sul solo training;
+- esportazione dei grafi holdout valutati;
 - proprietà DAG, connessione, copertura e riduzione transitiva;
 - confronto topologico con la baseline full-log;
 - riepilogo aggregato della valutazione.
@@ -1121,7 +1158,7 @@ Il progetto dimostra:
 - validità strutturale di tutti i 9 grafi holdout;
 - corrispondenza topologica esatta di tutti i 9 grafi con la baseline;
 - esecuzione senza errori dei notebook 05, 06, 07, 08, 09 e 10;
-- superamento di 71 test automatici.
+- superamento di 73 test automatici.
 
 ---
 
@@ -1137,6 +1174,7 @@ Il progetto non dimostra ancora:
 - gestione generale di eventi mancanti o aggiuntivi;
 - fitness globalmente sincronizzata della OCPN su un log di test separato;
 - validità delle soglie su tutte le 2.000 process execution;
+- selezione ottimale delle soglie mediante una procedura di model selection annidata; l’analisi training-only corrente è una diagnostica di stabilità;
 - correttezza su dataset differenti;
 - gestione generale di loop complessi;
 - disambiguazione generale di transizioni diverse con la stessa etichetta;
@@ -1152,6 +1190,20 @@ I risultati ottenuti costituiscono una verifica sperimentale sul dataset e sui c
 ---
 
 ## 16. Riproducibilità
+
+### Avvio da una PowerShell pulita
+
+Aprire una nuova finestra PowerShell e posizionarsi nella cartella che contiene `README.md`, `pyproject.toml`, `src`, `scripts`, `tests` e `notebooks`:
+
+```powershell
+Set-Location C:\Users\nicol\ocpm-partial-order\ocpm-partial-order
+
+Test-Path .\README.md
+Test-Path .\.venv\Scripts\python.exe
+Test-Path .\data\order_management.sqlite
+```
+
+I tre comandi `Test-Path` devono restituire `True`. Il prefisso corretto per l’interprete virtuale è sempre `.\.venv\Scripts\python.exe`: il punto e la barra rovesciata indicano esplicitamente a PowerShell di eseguire il file presente nella cartella corrente.
 
 Verifica dell’ambiente:
 
@@ -1194,6 +1246,17 @@ Esecuzione della validazione end-to-end degli Instance Graph:
 ```powershell
 .\.venv\Scripts\python.exe .\scripts\check_instance_graph_holdout.py
 ```
+
+Esecuzione della validazione con esportazione dei grafi PNG:
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\check_instance_graph_holdout.py `
+    --export-graphs
+
+Invoke-Item .\outputs\holdout_instance_graphs
+```
+
+Il primo comando deve mostrare lo split senza eventi o oggetti condivisi, la diagnostica delle esclusioni, la copertura, la sensibilità calcolata sul solo training e i risultati dei nove grafi. Il secondo apre Esplora file nella cartella contenente le immagini.
 
 Esecuzione del notebook conclusivo:
 

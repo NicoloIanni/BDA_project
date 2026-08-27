@@ -1,15 +1,55 @@
+import argparse
+from pathlib import Path
+
 from ocpm_partial_order.config import (
     MAIN_DATASET_DB,
 )
 from ocpm_partial_order.conformance import (
     evaluate_instance_graph_holdout,
+    evaluate_training_threshold_sensitivity,
+    export_holdout_instance_graphs,
 )
 from ocpm_partial_order.io.ocel_loader import (
     load_ocel2_sqlite,
 )
 
 
+DEFAULT_GRAPH_OUTPUT_DIRECTORY = Path(
+    "outputs/holdout_instance_graphs"
+)
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Valida gli Instance Graph su un test separato "
+            "e, opzionalmente, esporta i grafi in PNG."
+        )
+    )
+    parser.add_argument(
+        "--export-graphs",
+        nargs="?",
+        const=str(DEFAULT_GRAPH_OUTPUT_DIRECTORY),
+        metavar="DIRECTORY",
+        help=(
+            "esporta i grafi PNG; senza DIRECTORY usa "
+            "outputs/holdout_instance_graphs"
+        ),
+    )
+    parser.add_argument(
+        "--skip-sensitivity",
+        action="store_true",
+        help=(
+            "salta la griglia di sensibilità calcolata "
+            "esclusivamente sul training"
+        ),
+    )
+    return parser.parse_args()
+
+
 def main() -> None:
+    args = parse_args()
+
     print("=" * 72)
     print(
         "VALIDAZIONE HOLDOUT END-TO-END "
@@ -80,7 +120,7 @@ def main() -> None:
     )
 
     print()
-    print("APPRENDIMENTO DELLE RELAZIONI")
+    print("INFERENZA DELLE RELAZIONI CANDIDATE")
     print(
         "- dependency threshold:",
         evaluation.dependency_threshold,
@@ -127,6 +167,29 @@ def main() -> None:
         evaluation.exact_relation_set,
     )
 
+    if not args.skip_sensitivity:
+        sensitivity = (
+            evaluate_training_threshold_sensitivity(
+                split.training_ocel,
+                object_types=split.object_types,
+            )
+        )
+
+        print()
+        print("SENSIBILITA DELLE SOGLIE SUL SOLO TRAINING")
+        print(
+            "- configurazioni analizzate:",
+            sensitivity.configuration_count,
+        )
+        print(
+            "- configurazioni che mantengono "
+            "le relazioni predefinite:",
+            sensitivity.stable_configuration_count,
+        )
+        print(
+            "- dati di test usati per scegliere le soglie: no"
+        )
+
     print()
     print("SELEZIONE DELLE EXECUTION")
     print(
@@ -142,6 +205,24 @@ def main() -> None:
         "- ordini valutabili:",
         evaluation.evaluated_order_count,
     )
+    print(
+        "- copertura del prototipo:",
+        f"{evaluation.evaluation_coverage:.2%}",
+    )
+    print("- motivi di esclusione:")
+
+    for reason, count in (
+        evaluation.exclusion_reason_counts.items()
+    ):
+        print(f"  - {reason}: {count}")
+
+    print("- esempi di esclusione:")
+
+    for diagnostic in evaluation.excluded_orders[:5]:
+        print(
+            f"  - {diagnostic.order_id}: "
+            f"{diagnostic.message}"
+        )
 
     print()
     print("RISULTATI DEGLI INSTANCE GRAPH")
@@ -185,12 +266,27 @@ def main() -> None:
             f"{result.exact_topology}"
         )
 
+    if args.export_graphs:
+        exported_paths = export_holdout_instance_graphs(
+            evaluation,
+            args.export_graphs,
+        )
+        print()
+        print("GRAFI ESPORTATI")
+        print(
+            "- directory:",
+            Path(args.export_graphs).resolve(),
+        )
+        print("- file PNG:", len(exported_paths))
+
     print()
     print("INTERPRETAZIONE")
     print(
-        "Le causal relations usate sui casi "
-        "di test sono apprese esclusivamente "
-        "dal training."
+        "Le relazioni usate sui casi di test "
+        "sono candidate di precedenza causale "
+        "inferite dall'Object-Centric Directly-Follows "
+        "Graph del solo training. Non costituiscono "
+        "una prova di causalita semantica."
     )
     print(
         "La baseline full-log e utilizzata "
@@ -202,7 +298,8 @@ def main() -> None:
         "Gli ordini contaminati non sono "
         "errori del grafo: non rispettano "
         "la definizione order-centred "
-        "adottata dal prototipo."
+        "adottata dal prototipo. La copertura "
+        "riportata rende esplicito questo limite."
     )
     print(
         "Il controllo dimostra la "
